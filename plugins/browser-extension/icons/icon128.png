@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b"/>
+      <stop offset="100%" style="stop-color:#334155"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563eb"/>
+      <stop offset="100%" style="stop-color:#7c3aed"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Rounded square background -->
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  
+  <!-- Brain / Wiki symbol -->
+  <g transform="translate(64,64)">
+    <!-- Brain outline -->
+    <circle cx="0" cy="-8" r="30" fill="none" stroke="url(#accent)" stroke-width="5" opacity="0.9"/>
+    
+    <!-- Neural connections -->
+    <line x1="-18" y1="-16" x2="18" y2="-16" stroke="#22c55e" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+    <line x1="-14" y1="-4" x2="14" y2="-4" stroke="#22c55e" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+    <line x1="-10" y1="8" x2="10" y2="8" stroke="#22c55e" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+    
+    <!-- Connection nodes -->
+    <circle cx="-18" cy="-16" r="4" fill="#22c55e"/>
+    <circle cx="18" cy="-16" r="4" fill="#22c55e"/>
+    <circle cx="-14" cy="-4" r="4" fill="#facc15"/>
+    <circle cx="14" cy="-4" r="4" fill="#facc15"/>
+    <circle cx="0" cy="-16" r="3" fill="#60a5fa"/>
+    <circle cx="0" cy="-4" r="3" fill="#60a5fa"/>
+    <circle cx="0" cy="8" r="3" fill="#60a5fa"/>
+    
+    <!-- Auto-capture indicator (sparkle) -->
+    <text x="24" y="-20" font-size="18">✨</text>
+  </g>
+</svg>

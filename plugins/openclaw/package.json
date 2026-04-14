@@ -1,0 +1,1 @@
+{"name": "@compound-wiki/openclaw-plugin", "version": "2.0.0", "description": "Compound Wiki plugin for OpenClaw — AI Agent 记忆引擎 v2", "type": "module", "main": "index.ts", "license": "MIT", "keywords": ["openclaw", "openclaw-plugin", "memory", "wiki", "compound-memory"], "peerDependencies": {"openclaw": "*"}, "openclaw": {"extensions": ["./index.ts"]}}

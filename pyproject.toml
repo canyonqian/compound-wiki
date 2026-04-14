@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "compound-wiki"
+version = "2.0.0"
+description = "AI-driven compound interest memory system — let knowledge grow in value over time"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "Compound Wiki Contributors"},
+]
+keywords = [
+    "wiki", "knowledge-management", "ai-memory", "agent", 
+    "llm-wiki", "second-brain", "zettelkasten", "compound-interest",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Documentation",
+    "Topic :: Text Processing :: Markup",
+]
+
+dependencies = [
+    "httpx>=0.25.0",
+]
+
+[project.optional-dependencies]
+auto = [
+    "watchdog>=3.0.0",
+    "schedule>=1.2.0",
+]
+anthropic = [
+    "anthropic>=0.30.0",
+]
+openai = [
+    "openai>=1.10.0",
+]
+mcp = [
+    "mcp>=1.0.0",
+]
+all = [
+    "watchdog>=3.0.0",
+    "schedule>=1.2.0",
+    "anthropic>=0.30.0",
+    "openai>=1.10.0",
+    "beautifulsoup4>=4.12.0",
+    "feedparser>=6.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/canyonqian/compound-wiki"
+Documentation = "https://github.com/canyonqian/compound-wiki#readme"
+Repository = "https://github.com/canyonqian/compound-wiki.git"
+Issues = "https://github.com/canyonqian/compound-wiki/issues"
+
+# ============================================================
+#  CLI 入口点 — 安装后直接用 `cw` 命令
+# ============================================================
+[project.scripts]
+cw = "compound_wiki.cli:main"
+
+[tool.setuptools.packages.find]
+include = [
+    "memory_core*",
+    "auto*",
+    "plugins*",
+    "compound_wiki*",
+]
+
+[tool.setuptools.package-data]
+"memory_core" = ["*.md", "*.json"]
+"schema" = ["**/*.md"]
+"plugins" = ["config.json"]
+
+# Development dependencies
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

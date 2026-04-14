@@ -1,0 +1,55 @@
+# Git 忽略规则
+
+# === 操作系统 ===
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# === IDE ===
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# === 安全（敏感文件）===
+*.env
+*.env.local
+*_fix_*.py
+*_fix_*.sh
+
+# === Wiki 特殊 ===
+# 不忽略 wiki/ 内容（这是核心产物）
+# 但可以忽略临时文件
+wiki/*.tmp
+wiki/*.bak
+
+# === Outputs（可选保留）===
+# outputs/ 下的内容通常不需要提交
+# 取消下面的注释如果不想提交 outputs
+# outputs/*
+
+# === Auto Engine ===
+auto/logs/*
+auto/state/*.json
+.installed
+
+# === 原始资料（根据需要决定是否提交）===
+# raw/ 可能包含敏感或大文件
+# 如果 raw/ 很大或有隐私问题，考虑用 git-lfs 管理
+raw/collected/*.md
+
+# === Memory Core 运行时产物（不提交）===
+.memory_core/
+wiki/*-*.md  # 自动生成的带hash文件名页面
