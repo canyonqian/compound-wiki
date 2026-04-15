@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "compound-wiki"
@@ -32,6 +32,8 @@ classifiers = [
 
 dependencies = [
     "httpx>=0.25.0",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
 ]
 
 [project.optional-dependencies]
@@ -75,6 +77,7 @@ include = [
     "auto*",
     "plugins*",
     "compound_wiki*",
+    "cw_daemon*",
 ]
 
 [tool.setuptools.package-data]
