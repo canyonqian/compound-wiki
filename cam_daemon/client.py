@@ -20,7 +20,7 @@ Usage (any language — HTTP):
 
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger("cam_daemon.client")
 
@@ -33,8 +33,7 @@ class CamClient:
     Only ~80 lines of code.
     """
 
-    def __init__(self, base_url: str = "http://127.0.0.1:9877",
-                 timeout_sec: float = 10.0):
+    def __init__(self, base_url: str = "http://127.0.0.1:9877", timeout_sec: float = 10.0):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout_sec
         # Lazy import of httpx/aiohttp
@@ -42,30 +41,39 @@ class CamClient:
 
     # ── Async API ─────────────────────────────────────────────
 
-    async def remember(self, user_message: str, ai_response: str,
-                      agent_id: str = "unknown",
-                      session_id: str = "",
-                      **metadata) -> Dict[str, Any]:
+    async def remember(
+        self,
+        user_message: str,
+        ai_response: str,
+        agent_id: str = "unknown",
+        session_id: str = "",
+        **metadata,
+    ) -> Dict[str, Any]:
         """
         Send a conversation turn for automatic memory extraction.
 
         This is THE method that any Agent calls after each exchange.
         """
-        return await self._post("/hook", {
-            "user_message": user_message,
-            "ai_response": ai_response,
-            "agent_id": agent_id,
-            "session_id": session_id,
-            "metadata": metadata,
-        })
+        return await self._post(
+            "/hook",
+            {
+                "user_message": user_message,
+                "ai_response": ai_response,
+                "agent_id": agent_id,
+                "session_id": session_id,
+                "metadata": metadata,
+            },
+        )
 
-    async def ingest(self, content: str,
-                    source: str = "manual") -> Dict[str, Any]:
+    async def ingest(self, content: str, source: str = "manual") -> Dict[str, Any]:
         """Manually ingest content into the knowledge base."""
-        return await self._post("/ingest", {
-            "content": content,
-            "source": source,
-        })
+        return await self._post(
+            "/ingest",
+            {
+                "content": content,
+                "source": source,
+            },
+        )
 
     async def query(self, question: str, top_k: int = 5) -> Dict[str, Any]:
         """Query the Wiki knowledge base."""
@@ -81,18 +89,20 @@ class CamClient:
 
     # ── Sync API (for non-async contexts) ───────────────────────
 
-    def remember_sync(self, user_message: str, ai_response: str,
-                     agent_id: str = "unknown",
-                     **kwargs) -> Dict[str, Any]:
+    def remember_sync(self, user_message: str, ai_response: str, agent_id: str = "unknown", **kwargs) -> Dict[str, Any]:
         """Sync version of remember() for non-async contexts."""
         try:
-            import urllib.request, json as _j
-            payload = json.dumps({
-                "user_message": user_message,
-                "ai_response": ai_response,
-                "agent_id": agent_id,
-                **kwargs,
-            }).encode("utf-8")
+            import urllib.request
+            import json as _j
+
+            payload = json.dumps(
+                {
+                    "user_message": user_message,
+                    "ai_response": ai_response,
+                    "agent_id": agent_id,
+                    **kwargs,
+                }
+            ).encode("utf-8")
 
             req = urllib.request.Request(
                 f"{self.base_url}/hook",
@@ -116,6 +126,7 @@ class CamClient:
         """Make an async POST request."""
         try:
             import httpx
+
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 resp = await client.post(
                     f"{self.base_url}{path}",
@@ -127,12 +138,9 @@ class CamClient:
         except ImportError:
             # Fallback: use aiohttp or asyncio + urllib
             import aiohttp
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=self.timeout)
-            ) as session:
-                async with session.post(
-                    f"{self.base_url}{path}", json=data
-                ) as resp:
+
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout)) as session:
+                async with session.post(f"{self.base_url}{path}", json=data) as resp:
                     return await resp.json()
 
         except Exception as e:
@@ -143,24 +151,21 @@ class CamClient:
         """Make an async GET request."""
         try:
             import httpx
+
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(
-                    f"{self.base_url}{path}", params=params or {}
-                )
+                resp = await client.get(f"{self.base_url}{path}", params=params or {})
                 resp.raise_for_status()
                 return resp.json()
         except ImportError:
             import aiohttp
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=self.timeout)
-            ) as session:
-                async with session.get(
-                    f"{self.base_path}{path}", params=params or {}
-                ) as resp:
+
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout)) as session:
+                async with session.get(f"{self.base_path}{path}", params=params or {}) as resp:
                     return await resp.json()
 
 
 # ── Convenience wrapper for one-liner integration ─────────────
+
 
 class AutoRemember:
     """
@@ -174,9 +179,12 @@ class AutoRemember:
         await auto(user_msg, reply)   # ← That's it!
     """
 
-    def __init__(self, agent_id: str = "default",
-                 daemon_url: str = "http://127.0.0.1:9877",
-                 quiet: bool = True):
+    def __init__(
+        self,
+        agent_id: str = "default",
+        daemon_url: str = "http://127.0.0.1:9877",
+        quiet: bool = True,
+    ):
         self.client = CamClient(base_url=daemon_url)
         self.agent_id = agent_id
         self.quiet = quiet
@@ -190,20 +198,19 @@ class AutoRemember:
         )
 
         if not self.quiet and result.get("facts_written", 0) > 0:
-            logger.info(
-                f"🧠 Remembered {result['facts_written']} facts "
-                f"from {self.agent_id}"
-            )
+            logger.info(f"🧠 Remembered {result['facts_written']} facts from {self.agent_id}")
 
         return result
 
 
 # ── CLI helper: quick test connection ────────────────────────
 
+
 def ping(daemon_url: str = "http://127.0.0.1:9877") -> bool:
     """Quick check if daemon is reachable. Returns True/False."""
     try:
         import urllib.request
+
         req = urllib.request.Request(
             f"{daemon_url}/health",
             headers={"Accept": "application/json"},

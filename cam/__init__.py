@@ -15,7 +15,7 @@ CAM — AI 驱动的复利记忆系统
 
 作为 Python 库使用:
     from cam_core import MemoryCore
-    
+
     mc = MemoryCore(wiki_path="./wiki")
     await mc.initialize()
     result = await mc.remember(user_message, ai_response)

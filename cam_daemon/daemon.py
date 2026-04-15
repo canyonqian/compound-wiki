@@ -10,8 +10,6 @@ import asyncio
 import json
 import logging
 import os
-import sys
-import time
 from pathlib import Path
 
 logger = logging.getLogger("cam_daemon.daemon")
@@ -30,6 +28,7 @@ class DaemonManager:
 
     def __init__(self, config):
         from .config import DaemonConfig
+
         self.config: DaemonConfig = config
         self._server = None
         self._engine = None
@@ -80,10 +79,9 @@ class DaemonManager:
                     start_time = sdata.get("start_time", "")
                     if start_time:
                         from datetime import datetime
+
                         started = datetime.fromisoformat(start_time)
-                        uptime_sec = (
-                            datetime.utcnow() - started
-                        ).total_seconds()
+                        uptime_sec = (datetime.utcnow() - started).total_seconds()
                 except Exception:
                     pass
 
@@ -103,11 +101,10 @@ class DaemonManager:
         if self.is_running():
             existing_pid = int(self.pid_path.read_text().strip())
             raise RuntimeError(
-                f"Daemon already running (PID {existing_pid}). "
-                f"Use 'cam daemon stop' first or 'cam daemon restart'."
+                f"Daemon already running (PID {existing_pid}). Use 'cam daemon stop' first or 'cam daemon restart'."
             )
 
-        logger.info(f"Starting CAM Daemon v2.0.0")
+        logger.info("Starting CAM Daemon v2.0.0")
         logger.info(f"  Wiki: {self.config.wiki_path}")
         logger.info(f"  API : http://{self.config.host}:{self.config.port}")
         logger.info(f"  LLM : {self.config.llm.provider}/{self.config.llm.model}")
@@ -117,6 +114,7 @@ class DaemonManager:
 
         # Initialize engine
         from .server import CamEngine
+
         self._engine = CamEngine(self.config)
 
         # Write PID
@@ -125,6 +123,7 @@ class DaemonManager:
 
         # Write initial state
         from datetime import datetime
+
         state_data = {
             "start_time": datetime.utcnow().isoformat(),
             "pid": pid,
@@ -144,7 +143,7 @@ class DaemonManager:
 
         # Create engine & register as global (needed by FastAPI handlers)
         from .server import create_server
-        from .server import _engine_instance as _ei_ref
+
         create_server(  # This sets the global _engine_instance
             engine=self._engine,
             host=self.config.host,
@@ -186,6 +185,7 @@ class DaemonManager:
 
         if HAS_FASTAPI:
             import uvicorn
+
             config = uvicorn.Config(
                 app=fastapi_app,
                 host=self.config.host,
@@ -214,8 +214,10 @@ class DaemonManager:
         else:
             # Fallback HTTP server
             from .server import _FallbackHandler
+
             _FallbackHandler.engine = self._engine
             from http.server import HTTPServer
+
             http_server = HTTPServer(
                 (self.config.host, self.config.port),
                 _FallbackHandler,
@@ -252,6 +254,7 @@ class DaemonManager:
     async def _start_scheduler(self) -> None:
         """Start background scheduled tasks."""
         from .scheduler import CamScheduler
+
         self._scheduler = CamScheduler(engine=self._engine, config=self.config)
         await self._scheduler.start()
 

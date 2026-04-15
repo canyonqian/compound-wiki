@@ -19,7 +19,7 @@ import json
 import logging
 import time
 from collections import OrderedDict
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -41,6 +41,7 @@ logger = logging.getLogger("cam_daemon.server")
 
 # ── Request/Response Models (used by both FastAPI and fallback) ───
 
+
 class HookRequest:
     """Incoming conversation hook request.
 
@@ -54,13 +55,25 @@ class HookRequest:
         Only user_message + ai_response provided. Daemon calls
         external LLM for extraction. Requires API key / Ollama.
     """
-    __slots__ = ("user_message", "ai_response", "agent_id", "session_id",
-                 "metadata", "extracted_facts")
 
-    def __init__(self, user_message: str = "", ai_response: str = "",
-                 agent_id: str = "unknown", session_id: str = "",
-                 metadata: Dict[str, Any] = None,
-                 extracted_facts: Optional[List[Dict]] = None):
+    __slots__ = (
+        "user_message",
+        "ai_response",
+        "agent_id",
+        "session_id",
+        "metadata",
+        "extracted_facts",
+    )
+
+    def __init__(
+        self,
+        user_message: str = "",
+        ai_response: str = "",
+        agent_id: str = "unknown",
+        session_id: str = "",
+        metadata: Dict[str, Any] = None,
+        extracted_facts: Optional[List[Dict]] = None,
+    ):
         self.user_message = user_message
         self.ai_response = ai_response
         self.agent_id = agent_id or "unknown"
@@ -75,17 +88,22 @@ class HookRequest:
 
     @property
     def content_hash(self) -> str:
-        return hashlib.sha256(
-            self.combined_content.encode("utf-8")
-        ).hexdigest()[:16]
+        return hashlib.sha256(self.combined_content.encode("utf-8")).hexdigest()[:16]
 
 
 class HookResult:
     """Result of processing a hook."""
-    def __init__(self, success: bool = True, status: str = "",
-                 facts_extracted: int = 0, facts_written: int = 0,
-                 message: str = "", processing_time_ms: float = 0.0,
-                 throttled: bool = False):
+
+    def __init__(
+        self,
+        success: bool = True,
+        status: str = "",
+        facts_extracted: int = 0,
+        facts_written: int = 0,
+        message: str = "",
+        processing_time_ms: float = 0.0,
+        throttled: bool = False,
+    ):
         self.success = success
         self.status = status  # "ok" | "throttled" | "error"
         self.facts_extracted = facts_extracted
@@ -109,6 +127,7 @@ class HookResult:
 
 # ── Throttle Controller ───────────────────────────────────────
 
+
 class ThrottleController:
     """
     Prevents duplicate/near-duplicate hooks in rapid succession.
@@ -116,8 +135,7 @@ class ThrottleController:
     Uses sliding window of recent content hashes + time tracking.
     """
 
-    def __init__(self, min_interval_sec: float = 10.0,
-                 window_size: int = 50):
+    def __init__(self, min_interval_sec: float = 10.0, window_size: int = 50):
         self.min_interval_sec = min_interval_sec
         self.window_size = window_size
         # OrderedDict as LRU cache: hash → timestamp
@@ -139,8 +157,7 @@ class ThrottleController:
             if elapsed < self.min_interval_sec:
                 return (
                     False,
-                    f"Throttled: same content seen {elapsed:.0f}s ago "
-                    f"(min interval: {self.min_interval_sec}s)"
+                    f"Throttled: same content seen {elapsed:.0f}s ago (min interval: {self.min_interval_sec}s)",
                 )
             else:  # Old entry, refresh
                 del self._history[content_hash]
@@ -150,8 +167,7 @@ class ThrottleController:
         if last_hook and (now - last_hook) < self.min_interval_sec * 0.5:
             return (
                 False,
-                f"Throttled: agent '{req.agent_id}' hooked "
-                f"{(now - last_hook):.0f}s ago"
+                f"Throttled: agent '{req.agent_id}' hooked {(now - last_hook):.0f}s ago",
             )
 
         # Record this hook
@@ -166,6 +182,7 @@ class ThrottleController:
 
 # ── Core Daemon Engine ────────────────────────────────────────
 
+
 class CamEngine:
     """
     The brain of the daemon. Handles extraction → dedup → write pipeline.
@@ -175,6 +192,7 @@ class CamEngine:
 
     def __init__(self, config):
         from .config import DaemonConfig
+
         self.config: DaemonConfig = config
 
         # Lazy-loaded components
@@ -203,6 +221,7 @@ class CamEngine:
     def wiki(self):
         if self._wiki is None:
             from cam_core.shared_wiki import SharedWiki
+
             self._wiki = SharedWiki(
                 wiki_path=self.config.wiki_path,
                 raw_path=self.config.raw_path,
@@ -213,6 +232,7 @@ class CamEngine:
     def extractor(self):
         if self._extractor is None:
             from cam_core.extractor import FactExtractor
+
             self._extractor = FactExtractor(config=None)
             # Override LLM settings with daemon's own config
             self._extractor.llm_config = {
@@ -229,10 +249,11 @@ class CamEngine:
     def deduplicator(self):
         if self._deduplicator is None:
             from cam_core.deduplicator import Deduplicator
-            from cam_core.config import MemoryConfig, DEFAULT_CONFIG
+            from cam_core.config import DEFAULT_CONFIG
+
             # Build config with correct dedup threshold
             cfg = DEFAULT_CONFIG
-            if hasattr(cfg, 'deduplication') and hasattr(cfg.deduplication, 'near_duplicate_threshold'):
+            if hasattr(cfg, "deduplication") and hasattr(cfg.deduplication, "near_duplicate_threshold"):
                 cfg.deduplication.near_duplicate_threshold = self.config.dedup_similarity_threshold
             self._deduplicator = Deduplicator(config=cfg, wiki_index=self.wiki)
         return self._deduplicator
@@ -242,6 +263,7 @@ class CamEngine:
         """Lazy-loaded knowledge graph — auto-built from Wiki facts."""
         if self._graph is None:
             from cam_core.memory_graph import MemoryGraph
+
             graph_path = str(Path(self.config.wiki_path) / ".cam" / "graph.json")
             self._graph = MemoryGraph(graph_path=graph_path)
             self._graph._load()
@@ -321,8 +343,7 @@ class CamEngine:
 
             elapsed_ms = (time.time() - start) * 1000
             logger.info(
-                f"[{req.agent_id}] Extracted {fact_count} facts, "
-                f"wrote {written_count} new ({elapsed_ms:.0f}ms)"
+                f"[{req.agent_id}] Extracted {fact_count} facts, wrote {written_count} new ({elapsed_ms:.0f}ms)"
             )
 
             return HookResult(
@@ -356,10 +377,7 @@ class CamEngine:
 
         # ── Mode 1: Agent-Native (preferred) ──
         if req.extracted_facts:
-            logger.info(
-                f"[{req.agent_id}] Using Agent-Native mode: "
-                f"{len(req.extracted_facts)} pre-extracted facts"
-            )
+            logger.info(f"[{req.agent_id}] Using Agent-Native mode: {len(req.extracted_facts)} pre-extracted facts")
             parsed = []
             for item in req.extracted_facts:
                 try:
@@ -387,7 +405,7 @@ class CamEngine:
             )
             if isinstance(result, list):
                 return result
-            if hasattr(result, 'facts') and result.facts:
+            if hasattr(result, "facts") and result.facts:
                 return result.facts
             return []
         except Exception as e:
@@ -409,58 +427,87 @@ class CamEngine:
 
         # Decision patterns
         decision_patterns = [
-            "we decided", "we choose", "i decided", "we will use",
-            "we chose", "using ", "we're using", "deploy on",
-            "decided", "chose", "selected",
+            "we decided",
+            "we choose",
+            "i decided",
+            "we will use",
+            "we chose",
+            "using ",
+            "we're using",
+            "deploy on",
+            "decided",
+            "chose",
+            "selected",
         ]
         for pat in decision_patterns:
             if pat.lower() in text.lower():
                 # Find the sentence containing the pattern
                 for sentence in text.split("."):
                     if pat in sentence.lower():
-                        facts.append(ExtractedFact(
-                            fact_type=FactType.DECISION,
-                            content=sentence.strip(),
-                            confidence=0.7,
-                            source_text=source_text,
-                            source_type="daemon_heuristic",
-                        ))
+                        facts.append(
+                            ExtractedFact(
+                                fact_type=FactType.DECISION,
+                                content=sentence.strip(),
+                                confidence=0.7,
+                                source_text=source_text,
+                                source_type="daemon_heuristic",
+                            )
+                        )
                 break
 
         # Preference patterns
         pref_patterns = [
-            "prefer", "like to", "always use", "we prefer",
-            "偏好", "喜欢用", "习惯用",
+            "prefer",
+            "like to",
+            "always use",
+            "we prefer",
+            "偏好",
+            "喜欢用",
+            "习惯用",
         ]
         for pat in pref_patterns:
             if pat.lower() in text.lower():
                 for sentence in text.split("."):
                     if pat in sentence.lower():
-                        facts.append(ExtractedFact(
-                            fact_type=FactType.PREFERENCE,
-                            content=sentence.strip(),
-                            confidence=0.65,
-                            source_text=source_text,
-                            agent_id="daemon-heuristic",
-                        ))
+                        facts.append(
+                            ExtractedFact(
+                                fact_type=FactType.PREFERENCE,
+                                content=sentence.strip(),
+                                confidence=0.65,
+                                source_text=source_text,
+                                agent_id="daemon-heuristic",
+                            )
+                        )
                 break
 
         # Entity patterns (tech stack mentions)
         entity_patterns = [
-            "PostgreSQL", "Redis", "Docker", "Kubernetes",
-            "React", "Vue", "Python", "Go", "Rust",
-            "FastAPI", "Django", "Flask",
-            "GitHub Actions", "CI/CD",
+            "PostgreSQL",
+            "Redis",
+            "Docker",
+            "Kubernetes",
+            "React",
+            "Vue",
+            "Python",
+            "Go",
+            "Rust",
+            "FastAPI",
+            "Django",
+            "Flask",
+            "GitHub Actions",
+            "CI/CD",
         ]
         for entity in entity_patterns:
             if entity in text:
-                facts.append(ExtractedFact(
-                    fact_type=FactType.ENTITY,
-                    content=entity,
-                    confidence=0.85,
-                    source_text=source_text,
-                    agent_id="daemon-heuristic",
-                ))
+                facts.append(
+                    ExtractedFact(
+                        fact_type=FactType.ENTITY,
+                        content=entity,
+                        confidence=0.85,
+                        source_text=source_text,
+                        agent_id="daemon-heuristic",
+                    )
+                )
 
         return facts[:10]  # Cap at 10 heuristic facts
 
@@ -470,7 +517,7 @@ class CamEngine:
             return facts
         # Use Deduplicator's main entry point: deduplicate() → DedupResult
         result = await self.deduplicator.deduplicate(facts)
-        return result.unique_facts if hasattr(result, 'unique_facts') else facts
+        return result.unique_facts if hasattr(result, "unique_facts") else facts
 
     async def _write_facts(self, facts: list, agent_id: str) -> int:
         """Write facts to Wiki via atomic transaction, then auto-update knowledge graph."""
@@ -484,8 +531,9 @@ class CamEngine:
         if written > 0:
             try:
                 from cam_core.extractor import FactType
+
                 for fact in facts:
-                    if hasattr(fact, 'fact_type') and hasattr(fact, 'content'):
+                    if hasattr(fact, "fact_type") and hasattr(fact, "content"):
                         node_type = {
                             FactType.ENTITY: "entity",
                             FactType.CONCEPT: "concept",
@@ -499,7 +547,7 @@ class CamEngine:
                             node_type=node_type,
                             label=fact.content[:80],
                             content=fact.content,
-                            source_file=getattr(fact, 'wiki_path', ''),
+                            source_file=getattr(fact, "wiki_path", ""),
                             agent_id=agent_id,
                         )
                 self.graph._save()
@@ -520,13 +568,15 @@ class CamEngine:
             if ptype in type_counts:
                 type_counts[ptype] += 1
 
-            entries.append({
-                "title": page["name"].replace("-", " ").title(),
-                "path": page["path"],
-                "type": ptype,
-                "summary": "",
-                "updated": page["modified"],
-            })
+            entries.append(
+                {
+                    "title": page["name"].replace("-", " ").title(),
+                    "path": page["path"],
+                    "type": ptype,
+                    "summary": "",
+                    "updated": page["modified"],
+                }
+            )
 
         total = sum(type_counts.values())
 
@@ -571,13 +621,15 @@ class CamEngine:
 
         for r in results[:top_k]:
             page_content = await self.wiki.read_page(r["path"])
-            output["matches"].append({
-                "page": r["path"],
-                "name": r["name"],
-                "preview": r.get("preview", ""),
-                "match_count": r.get("match_count", 0),
-                "content_snippet": (page_content or "")[:300],
-            })
+            output["matches"].append(
+                {
+                    "page": r["path"],
+                    "name": r["name"],
+                    "preview": r.get("preview", ""),
+                    "match_count": r.get("match_count", 0),
+                    "content_snippet": (page_content or "")[:300],
+                }
+            )
 
         return output
 
@@ -587,11 +639,7 @@ class CamEngine:
 
         return {
             "daemon": {
-                "uptime_sec": (
-                    datetime.utcnow() - datetime.fromisoformat(
-                        self._stats["start_time"]
-                    )
-                ).total_seconds(),
+                "uptime_sec": (datetime.utcnow() - datetime.fromisoformat(self._stats["start_time"])).total_seconds(),
                 "hooks_received": self._stats["hooks_received"],
                 "hooks_processed": self._stats["hooks_processed"],
                 "hooks_throttled": self._stats["hooks_throttled"],
@@ -670,13 +718,12 @@ if HAS_FASTAPI:
         extracted_facts: Optional[List[Dict[str, Any]]] = Field(
             default=None,
             description="Pre-extracted facts (Agent-Native mode). "
-                        "If provided, daemon skips LLM call and uses these directly.",
+            "If provided, daemon skips LLM call and uses these directly.",
         )
         # Alternative format: full conversation array (auto-parsed)
         conversation: Optional[List[Dict[str, str]]] = Field(
             default=None,
-            description="Conversation history. "
-                        "Auto-parsed to user_message + ai_response if not set directly.",
+            description="Conversation history. Auto-parsed to user_message + ai_response if not set directly.",
         )
 
         def parse_conversation(self) -> tuple:
@@ -685,12 +732,9 @@ if HAS_FASTAPI:
                 return self.user_message, self.ai_response
             if not self.conversation:
                 return "", ""
-            user_msgs = [m.get("content", "") for m in self.conversation
-                        if m.get("role") == "user"]
-            ai_msgs = [m.get("content", "") for m in self.conversation
-                      if m.get("role") in ("assistant", "ai")]
-            return (user_msgs[-1] if user_msgs else "",
-                    ai_msgs[-1] if ai_msgs else "")
+            user_msgs = [m.get("content", "") for m in self.conversation if m.get("role") == "user"]
+            ai_msgs = [m.get("content", "") for m in self.conversation if m.get("role") in ("assistant", "ai")]
+            return (user_msgs[-1] if user_msgs else "", ai_msgs[-1] if ai_msgs else "")
 
     class IngestRequestModel(BaseModel):
         content: str
@@ -750,11 +794,13 @@ if HAS_FASTAPI:
     @app.get("/health")
     async def api_health() -> JSONResponse:
         """Health check endpoint."""
-        return JSONResponse({
-            "status": "healthy",
-            "version": "2.0.0",
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        return JSONResponse(
+            {
+                "status": "healthy",
+                "version": "2.0.0",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
 else:
     # ── Fallback: pure Python HTTP server (no FastAPI dependency) ───
@@ -768,6 +814,7 @@ else:
 
         def do_POST(self):
             import asyncio
+
             content_len = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_len) if content_len > 0 else b"{}"
 
@@ -788,10 +835,8 @@ else:
                     if not um and not ar:
                         conv = data.get("conversation", [])
                         if conv:
-                            user_msgs = [m.get("content","") for m in conv
-                                        if m.get("role") == "user"]
-                            ai_msgs = [m.get("content","") for m in conv
-                                      if m.get("role") in ("assistant","ai")]
+                            user_msgs = [m.get("content", "") for m in conv if m.get("role") == "user"]
+                            ai_msgs = [m.get("content", "") for m in conv if m.get("role") in ("assistant", "ai")]
                             um = user_msgs[-1] if user_msgs else ""
                             ar = ai_msgs[-1] if ai_msgs else ""
                     req = HookRequest(
@@ -802,9 +847,7 @@ else:
                         metadata=data.get("metadata", {}),
                         extracted_facts=data.get("extracted_facts"),
                     )
-                    result = asyncio.get_event_loop().run_until_complete(
-                        self.engine.on_conversation_turn(req)
-                    )
+                    result = asyncio.get_event_loop().run_until_complete(self.engine.on_conversation_turn(req))
                     response_data = result.to_dict()
                     status_code = 200 if result.success else 500
 
@@ -869,8 +912,7 @@ else:
             logger.debug(f"[HTTP] {args}")
 
 
-def create_server(engine: CamEngine, host: str = "127.0.0.1",
-                  port: int = 9877):
+def create_server(engine: CamEngine, host: str = "127.0.0.1", port: int = 9877):
     """
     Create the HTTP server instance (with engine attached).
 

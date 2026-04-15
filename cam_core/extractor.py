@@ -21,11 +21,11 @@ Analyzes conversation turns and extracts structured knowledge:
       2. Agent generates response (normal chat)
       3. Agent ALSO runs internal extraction prompt on same conversation turn
       4. Passes extracted facts directly to MemoryCore.remember()
-      
+
     Integration examples:
       # In Claude Code / Cursor / any AI agent:
       mc = MemoryCore(wiki_path="./wiki")
-      
+
       # After each response, agent calls extract_from_agent():
       facts = mc.extractor.extract_from_agent(
           user_message=msg,
@@ -44,7 +44,7 @@ Analyzes conversation turns and extracts structured knowledge:
     falls back to calling OpenAI/Anthropic/Ollama API.
 
     Requires one of: OPENAI_API_KEY, ANTHROPIC_API_KEY, or local Ollama.
-    
+
 This dual-mode design means:
   - When embedded in an AI Agent → ZERO extra cost (uses Agent's own brain)
   - When running standalone → Works with any LLM provider
@@ -54,9 +54,9 @@ import json
 import logging
 import re
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Callable, Awaitable
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
 logger = logging.getLogger("cam_core.extractor")
@@ -64,29 +64,30 @@ logger = logging.getLogger("cam_core.extractor")
 
 class FactType(Enum):
     """Types of knowledge extracted from conversations."""
-    FACT = "fact"               # Factual statements about the world/user
-    CONCEPT = "concept"          # Technical/domain concepts explained
-    DECISION = "decision"        # Choices made with reasoning
-    PREFERENCE = "preference"    # User's style/behavioral preferences
-    TASK = "task"                # Action items / TODOs
-    ENTITY = "entity"            # Named entities (people, projects, tools)
+
+    FACT = "fact"  # Factual statements about the world/user
+    CONCEPT = "concept"  # Technical/domain concepts explained
+    DECISION = "decision"  # Choices made with reasoning
+    PREFERENCE = "preference"  # User's style/behavioral preferences
+    TASK = "task"  # Action items / TODOs
+    ENTITY = "entity"  # Named entities (people, projects, tools)
 
 
 @dataclass
 class ExtractedFact:
     """A single piece of knowledge extracted from conversation."""
-    
+
     fact_type: FactType
-    content: str                 # The fact text itself
-    confidence: float            # 0.0 - 1.0, LLM's confidence score
-    source_text: str             # Original conversation text that produced this
-    context: str = ""            # Surrounding conversation for disambiguation
+    content: str  # The fact text itself
+    confidence: float  # 0.0 - 1.0, LLM's confidence score
+    source_text: str  # Original conversation text that produced this
+    context: str = ""  # Surrounding conversation for disambiguation
     tags: List[str] = field(default_factory=list)  # Auto-generated tags
     entities_mentioned: List[str] = field(default_factory=list)
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    agent_id: str = "unknown"    # Which Agent extracted this
-    turn_id: str = ""            # Conversation turn identifier
-    
+    agent_id: str = "unknown"  # Which Agent extracted this
+    turn_id: str = ""  # Conversation turn identifier
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "fact_type": self.fact_type.value,
@@ -100,7 +101,7 @@ class ExtractedFact:
             "agent_id": self.agent_id,
             "turn_id": self.turn_id,
         }
-    
+
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "ExtractedFact":
         return cls(
@@ -117,21 +118,21 @@ class ExtractedFact:
         )
 
 
-@dataclass 
+@dataclass
 class ExtractionResult:
     """Result of an extraction operation on a conversation turn."""
-    
+
     facts: List[ExtractedFact] = field(default_factory=list)
-    should_extract: bool = False       # Whether extraction was triggered
-    trigger_reason: str = ""           # Why extraction happened (or didn't)
+    should_extract: bool = False  # Whether extraction was triggered
+    trigger_reason: str = ""  # Why extraction happened (or didn't)
     tokens_analyzed: int = 0
     processing_time_ms: float = 0.0
-    mode: str = "unknown"             # "agent_native" | "llm_fallback" | "rule_based"
-    
+    mode: str = "unknown"  # "agent_native" | "llm_fallback" | "rule_based"
+
     @property
     def fact_count(self) -> int:
         return len(self.facts)
-    
+
     def summary(self) -> str:
         if not self.facts:
             return f"No extraction ({self.trigger_reason})"
@@ -205,19 +206,20 @@ Guidelines:
 class FactExtractor:
     """
     Dual-mode fact extractor.
-    
+
     Mode 1 (Agent-Native): Accepts pre-extracted facts from the hosting Agent.
         Zero extra cost. Recommended for all Agent integrations.
-        
+
     Mode 2 (LLM Fallback): Calls an external LLM API for extraction.
         Useful for standalone usage or when Agent cannot do self-extraction.
     """
-    
+
     def __init__(self, config=None, llm_client=None):
         from .config import MemoryConfig
+
         self.config = config or MemoryConfig()
         self.llm_client = llm_client  # Optional external client
-        
+
         self._stats = {
             "total_extractions": 0,
             "total_facts_found": 0,
@@ -226,11 +228,11 @@ class FactExtractor:
             "rule_based_count": 0,
             "errors": 0,
         }
-    
+
     # ================================================================
     # MODE 1: Agent-Native Extraction (Zero Cost)
     # ================================================================
-    
+
     def extract_from_agent(
         self,
         user_message: str,
@@ -241,11 +243,11 @@ class FactExtractor:
     ) -> ExtractionResult:
         """
         Accept facts extracted by the hosting Agent itself.
-        
+
         This is the PRIMARY recommended mode. The Agent uses its own LLM
         intelligence to analyze the conversation and produce extracted facts,
         then passes them here for deduplication and storage.
-        
+
         Args:
             user_message: What the user said
             assistant_response: What the Agent replied
@@ -253,17 +255,17 @@ class FactExtractor:
                               Each dict: {"fact_type": "...", "content": "...", ...}
             agent_id: Identifier of the extracting Agent
             turn_id: Conversation turn identifier
-            
+
         Returns:
             ExtractionResult with validated, typed ExtractedFact objects
-            
+
         Example (inside an Agent's chat loop):
             # Agent just generated its response
             response = await llm.chat(user_message)
-            
+
             # Agent also extracts (using its own intelligence, no extra API call!)
             raw_facts = await llm.extract(AGENT_EXTRACTION_PROMPT.format(...))
-            
+
             # Feed into MemoryCore
             result = mc.extractor.extract_from_agent(user_message, response, raw_facts)
             await mc.store(result.facts)
@@ -272,55 +274,53 @@ class FactExtractor:
         result = ExtractionResult(mode="agent_native")
         combined_text = f"{user_message} {assistant_response}"
         result.tokens_analyzed = len(combined_text.split())
-        
+
         if extracted_facts is None:
             result.should_extract = False
             result.trigger_reason = "no_facts_provided_by_agent"
             self._stats["agent_native_count"] += 1
             return result
-        
+
         try:
             parsed_facts = self._parse_extraction_response(
                 json.dumps({"facts": extracted_facts}) if isinstance(extracted_facts, list) else extracted_facts,
                 source_text=combined_text,
                 agent_id=agent_id,
             )
-            
+
             # Apply quality filters
             filtered = self._filter_by_quality(parsed_facts)
-            
+
             # Set turn IDs
             for f in filtered:
                 f.turn_id = turn_id or f"agent_{self._stats['total_extractions']}"
-            
+
             result.facts = filtered
             result.should_extract = len(filtered) > 0
             result.trigger_reason = (
-                f"agent_provided_{len(filtered)}_facts"
-                if filtered
-                else "all_facts_filtered_by_quality"
+                f"agent_provided_{len(filtered)}_facts" if filtered else "all_facts_filtered_by_quality"
             )
-            
+
             self._stats["total_facts_found"] += len(filtered)
             self._stats["agent_native_count"] += 1
             logger.info(f"[Agent-Native] Extracted {len(filtered)} facts from Agent")
-                
+
         except Exception as e:
             logger.error(f"[Agent-Native] Fact parsing failed: {e}")
             result.trigger_reason = f"parse_error: {e}"
             self._stats["errors"] += 1
-        
+
         result.processing_time_ms = (time.time() - start) * 1000
         self._stats["total_extractions"] += 1
         return result
-    
+
     def get_extraction_prompt(self, user_message: str, assistant_response: str) -> str:
         """
         Return the formatted extraction prompt for the Agent to execute.
-        
+
         The Agent should feed this prompt into its OWN LLM (same one it uses for chat),
         get back JSON, then call extract_from_agent() with the result.
-        
+
         This is the "one-hop" pattern: Agent→Agent's own LLM→MemoryCore
         No external API, no extra cost.
         """
@@ -328,14 +328,14 @@ class FactExtractor:
             user_message=user_message,
             assistant_response=assistant_response,
         )
-    
+
     # ================================================================
     # MODE 2: LLM Fallback (External API)
     # ================================================================
-    
+
     async def extract(
-        self, 
-        user_message: str, 
+        self,
+        user_message: str,
         assistant_response: str,
         history: List[Dict] = None,
         agent_id: str = "default",
@@ -343,17 +343,17 @@ class FactExtractor:
     ) -> ExtractionResult:
         """
         Full extraction pipeline with LLM fallback.
-        
+
         Tries Mode 1 (Agent native) first if facts are available via hook context,
         otherwise falls back to Mode 2 (external LLM API).
-        
+
         Args:
             user_message: User's message in this turn
             assistant_response: Assistant's reply
             history: Recent conversation for context
             agent_id: Which agent is doing the extraction
             force: Force extraction even for short messages
-            
+
         Returns:
             ExtractionResult with extracted facts
         """
@@ -361,59 +361,55 @@ class FactExtractor:
         result = ExtractionResult(mode="llm_fallback")
         combined_text = f"{user_message} {assistant_response}"
         result.tokens_analyzed = len(combined_text.split())
-        
+
         # Step 1: Should we extract?
         if not force and not self.should_extract(user_message, assistant_response):
             result.should_extract = False
             result.trigger_reason = "below_threshold"
             result.processing_time_ms = (time.time() - start) * 1000
             return result
-        
+
         result.should_extract = True
-        
+
         try:
             # Step 2: Call LLM (external API)
-            user_prompt = self._build_extraction_prompt(
-                user_message, assistant_response, history
-            )
-            
+            user_prompt = self._build_extraction_prompt(user_message, assistant_response, history)
+
             raw_response = await self._call_llm(user_prompt)
-            
+
             # Step 3: Parse response into facts
-            parsed_facts = self._parse_extraction_response(
-                raw_response, combined_text, agent_id
-            )
-            
+            parsed_facts = self._parse_extraction_response(raw_response, combined_text, agent_id)
+
             # Step 4: Quality filtering
             filtered_facts = self._filter_by_quality(parsed_facts)
-            
+
             # Step 5: Set metadata
             for f in filtered_facts:
                 f.turn_id = f"turn_{self._stats['total_extractions']}"
                 f.agent_id = agent_id
-            
+
             result.facts = filtered_facts
             result.trigger_reason = "llm_extraction_complete"
-            
+
             self._stats["total_facts_found"] += len(filtered_facts)
             self._stats["llm_fallback_count"] += 1
-            
+
             if self.config.log_extraction:
                 logger.info(f"[LLM-Fallback] {result.summary()} [{result.trigger_reason}]")
-                
+
         except Exception as e:
             logger.error(f"[LLM-Fallback] Extraction failed: {e}")
             result.trigger_reason = f"extraction_error: {e}"
             self._stats["errors"] += 1
-        
+
         result.processing_time_ms = (time.time() - start) * 1000
         self._stats["total_extractions"] += 1
         return result
-    
+
     async def _call_llm(self, user_prompt: str) -> str:
         """
         Call the configured LLM for extraction.
-        
+
         Uses injected llm_client if available, otherwise falls back
         to built-in HTTP clients for OpenAI/Anthropic/Ollama.
         """
@@ -425,44 +421,44 @@ class FactExtractor:
                 max_tokens=2000,
                 response_format={"type": "json_object"},
             )
-        
+
         return await self._call_llm_fallback(user_prompt)
-    
+
     async def _call_llm_fallback(self, user_prompt: str) -> str:
         """Fallback LLM caller using environment-detected provider."""
-        import httpx
-        
+
         provider = self.config.llm_provider
         model = self.config.llm_model
-        
+
         if provider == "auto":
             provider = self._detect_available_provider()
-        
+
         if provider == "openai":
             api_key = os.environ.get("OPENAI_API_KEY")
             base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
             model = model or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
             return await self._openai_call(base_url, api_key, model, user_prompt)
-        
+
         elif provider == "anthropic":
             api_key = os.environ.get("ANTHROPIC_API_KEY")
             model = model or "claude-sonnet-4-20250514"
             return await self._anthropic_call(api_key, model, user_prompt)
-        
+
         elif provider == "ollama":
             base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
             model = model or os.environ.get("OLLAMA_MODEL", "llama3")
             return await self._ollama_call(base_url, model, user_prompt)
-        
+
         else:
             raise RuntimeError(
                 "No LLM provider available. "
                 "Use Agent-Native mode (extract_from_agent), or set "
                 "OPENAI_API_KEY / ANTHROPIC_API_KEY / run Ollama locally."
             )
-    
+
     async def _openai_call(self, base_url, api_key, model, prompt):
         import httpx
+
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
                 f"{base_url}/chat/completions",
@@ -483,9 +479,10 @@ class FactExtractor:
             )
             resp.raise_for_status()
             return resp.json()["choices"][0]["message"]["content"]
-    
+
     async def _anthropic_call(self, api_key, model, prompt):
         import httpx
+
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
                 "https://api.anthropic.com/v1/messages",
@@ -503,9 +500,10 @@ class FactExtractor:
             )
             resp.raise_for_status()
             return resp.json()["content"][0]["text"]
-    
+
     async def _ollama_call(self, base_url, model, prompt):
         import httpx
+
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
                 f"{base_url}/api/chat",
@@ -521,7 +519,7 @@ class FactExtractor:
             )
             resp.raise_for_status()
             return resp.json()["message"]["content"]
-    
+
     def _detect_available_provider(self) -> str:
         """Auto-detect which LLM provider is available via env vars."""
         if os.environ.get("ANTHROPIC_API_KEY"):
@@ -530,6 +528,7 @@ class FactExtractor:
             return "openai"
         try:
             import httpx
+
             resp = httpx.get("http://localhost:11434/api/tags", timeout=2)
             if resp.status_code == 200:
                 return "ollama"
@@ -540,26 +539,26 @@ class FactExtractor:
             "Recommended: Use Agent-Native mode instead (extract_from_agent). "
             "Or set one of: OPENAI_API_KEY, ANTHROPIC_API_KEY, or run Ollama."
         )
-    
+
     # ================================================================
     # Rule-Based Fast Path (No LLM at all)
     # ================================================================
-    
+
     def should_extract(self, user_message: str, assistant_response: str) -> Tuple[bool, str]:
         """
         Quick rule-based check: does this conversation contain memorable info?
-        
+
         This is the FIRST gate before any LLM call. Filters out ~70% of
         trivial exchanges (greetings, acknowledgments, etc.) instantly,
         at zero cost.
         """
         rules = self.config.extraction
         combined = f"{user_message} {assistant_response}".lower()
-        
+
         # Length check
         if len(combined.strip()) < rules.min_exchange_length:
             return False, "too_short"
-        
+
         # Trivial pattern detection
         trivial_patterns = [
             r"^(hi|hello|hey|thanks|thank you|ok|okay|sure|yes|no|bye|goodbye)[\s!.,?]*$",
@@ -569,13 +568,13 @@ class FactExtractor:
         for pattern in trivial_patterns:
             if re.match(pattern, combined.strip()):
                 return False, "trivial_exchange"
-        
+
         # Signal detection — look for indicators of valuable content
         signal_patterns = [
             # Decision signals
             r"(decided|chose|choose|selected|going with|going to use|will use|prefer|using)\b",
             r"(i think|i believe|my opinion|in my view|we should|let's go with)\b",
-            # Preference signals  
+            # Preference signals
             r"(like|love|hate|don't like|prefer not|always|never|usually)\b",
             # Task signals
             r"(need to|have to|must|should|todo|to-do|task|implement|build|create|fix)\b",
@@ -584,28 +583,26 @@ class FactExtractor:
             # Entity signals
             r"(project|team|company|tool|library|framework|service|api|database|server)\b",
         ]
-        
+
         signal_count = sum(1 for p in signal_patterns if re.search(p, combined))
         if signal_count < rules.min_signal_count:
             return False, "too_few_signals"
-        
+
         return True, f"signals_detected({signal_count})"
-    
+
     # ================================================================
     # Shared Utilities
     # ================================================================
-    
-    def _parse_extraction_response(self, raw_response: str, 
-                                    source_text: str,
-                                    agent_id: str) -> List[ExtractedFact]:
+
+    def _parse_extraction_response(self, raw_response: str, source_text: str, agent_id: str) -> List[ExtractedFact]:
         """Parse LLM/Agent JSON response into ExtractedFact objects."""
         try:
-            json_match = re.search(r'\{[\s\S]*\}', raw_response)
+            json_match = re.search(r"\{[\s\S]*\}", raw_response)
             if json_match:
                 data = json.loads(json_match.group())
             else:
                 data = json.loads(raw_response)
-            
+
             facts = []
             for item in data.get("facts", []):
                 fact = ExtractedFact(
@@ -619,37 +616,35 @@ class FactExtractor:
                     agent_id=agent_id,
                 )
                 facts.append(fact)
-            
+
             return facts
-            
+
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse extraction JSON: {e}")
             return []
-    
+
     def _filter_by_quality(self, facts: List[ExtractedFact]) -> List[ExtractedFact]:
         """Filter out low-quality extractions."""
         rules = self.config.extraction
         filtered = []
-        
+
         for f in facts:
             if f.confidence < rules.min_confidence:
                 continue
             if len(f.content) < rules.min_fact_length:
                 continue
             if len(f.content) > rules.max_fact_length:
-                f.content = f.content[:rules.max_fact_length] + "..."
+                f.content = f.content[: rules.max_fact_length] + "..."
             if not f.content.strip() or f.content.strip() in (".", "!", "?"):
                 continue
             filtered.append(f)
-        
+
         return filtered
-    
-    def _build_extraction_prompt(self, user_message: str, 
-                                  assistant_response: str,
-                                  history: List[Dict] = None) -> str:
+
+    def _build_extraction_prompt(self, user_message: str, assistant_response: str, history: List[Dict] = None) -> str:
         """Build the full extraction prompt for LLM."""
         recent_context = self._format_recent_context(history)
-        
+
         prompt = f"""## Latest Exchange
 **User:** {user_message}
 
@@ -665,7 +660,7 @@ class FactExtractor:
 ## Instructions
 Analyze the above conversation and extract ALL facts, decisions, preferences, concepts, tasks, and entities worth remembering. Output JSON only."""
         return prompt
-    
+
     def _format_recent_context(self, history: List[Dict] = None) -> str:
         """Format recent conversation history as context for extraction."""
         if not history:
@@ -676,7 +671,7 @@ Analyze the above conversation and extract ALL facts, decisions, preferences, co
             content = turn.get("content", "")[:200]
             lines.append(f"- **{role}**: {content}")
         return "\n".join(lines)
-    
+
     @property
     def stats(self) -> Dict[str, Any]:
         """Return extraction statistics."""

@@ -12,18 +12,23 @@ import sys
 import time
 
 # ── Colors (reuse from parent) ────────────────────────────────
-C = type("C", (), {
-    k: v for k, v in {
-        "RED": "\033[91m" if os.name != "nt" else "",
-        "GREEN": "\033[92m" if os.name != "nt" else "",
-        "YELLOW": "\033[93m" if os.name != "nt" else "",
-        "BLUE": "\033[94m" if os.name != "nt" else "",
-        "CYAN": "\033[96m" if os.name != "nt" else "",
-        "BOLD": "\033[1m" if os.name != "nt" else "",
-        "DIM": "\033[2m" if os.name != "nt" else "",
-        "END": "\033[0m" if os.name != "nt" else "",
-    }.items()
-})()
+C = type(
+    "C",
+    (),
+    {
+        k: v
+        for k, v in {
+            "RED": "\033[91m" if os.name != "nt" else "",
+            "GREEN": "\033[92m" if os.name != "nt" else "",
+            "YELLOW": "\033[93m" if os.name != "nt" else "",
+            "BLUE": "\033[94m" if os.name != "nt" else "",
+            "CYAN": "\033[96m" if os.name != "nt" else "",
+            "BOLD": "\033[1m" if os.name != "nt" else "",
+            "DIM": "\033[2m" if os.name != "nt" else "",
+            "END": "\033[0m" if os.name != "nt" else "",
+        }.items()
+    },
+)()
 
 
 def _parse_daemon_args(args):
@@ -49,6 +54,7 @@ def cmd_daemon_start(rest_args=None):
     # Check if already running
     try:
         import urllib.request
+
         req = urllib.request.Request(
             f"http://{args.host}:{args.port}/health",
             headers={"Accept": "application/json"},
@@ -62,7 +68,7 @@ def cmd_daemon_start(rest_args=None):
                     existing_pid = open(pid_path).read().strip()
                 print(f"{C.YELLOW}⚠️  Daemon is already running (PID {existing_pid}){C.END}")
                 print(f"  API: http://{args.host}:{args.port}")
-                print(f"\n  Use 'cam daemon stop' to stop it first.")
+                print("\n  Use 'cam daemon stop' to stop it first.")
                 return
     except Exception:
         pass  # Not running, good
@@ -102,8 +108,11 @@ def cmd_daemon_start(rest_args=None):
     if not os.path.exists(daemon_script):
         # Fallback: try as a module
         daemon_cmd = [
-            sys.executable, "-m", "cam_daemon._run",
-            "--config", str(config_path),
+            sys.executable,
+            "-m",
+            "cam_daemon._run",
+            "--config",
+            str(config_path),
         ]
     else:
         daemon_cmd = [sys.executable, daemon_script, "--config", str(config_path)]
@@ -111,8 +120,7 @@ def cmd_daemon_start(rest_args=None):
     # Start in background on Unix, or as a detached process on Windows
     if os.name == "nt":
         # Windows: use CREATE_NEW_PROCESS_GROUP to detach
-        creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | \
-                        subprocess.DETACHED_PROCESS
+        creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
         proc = subprocess.Popen(
             daemon_cmd,
             stdout=open(os.devnull, "w"),
@@ -127,7 +135,11 @@ def cmd_daemon_start(rest_args=None):
             time.sleep(1)
 
             print(f"{C.GREEN}✅ Daemon starting...{C.END}")
-            print(f"  Checking API at http://{args.host}:{args.port}/health ...", end=" ", flush=True)
+            print(
+                f"  Checking API at http://{args.host}:{args.port}/health ...",
+                end=" ",
+                flush=True,
+            )
 
             # Wait for daemon to be ready
             max_wait = 10
@@ -135,9 +147,7 @@ def cmd_daemon_start(rest_args=None):
             for i in range(max_wait):
                 time.sleep(0.5)
                 try:
-                    req = urllib.request.Request(
-                        f"http://{args.host}:{args.port}/health"
-                    )
+                    req = urllib.request.Request(f"http://{args.host}:{args.port}/health")
                     with urllib.request.urlopen(req, timeout=2) as resp:
                         data = json.loads(resp.read().decode())
                         if data.get("status") == "healthy":
@@ -148,18 +158,18 @@ def cmd_daemon_start(rest_args=None):
 
             if started:
                 print(f"{C.GREEN}✅ Online!{C.END}\n")
-                print(f"  Agent 接入方式:")
+                print("  Agent 接入方式:")
                 print(f"    POST http://{args.host}:{args.port}/hook")
                 print(f"    GET  http://{args.host}:{args.port}/query?q=...")
                 print()
-                print(f"  管理命令:")
-                print(f"    cam daemon status")
-                print(f"    cam daemon stop")
-                print(f"    cam daemon ping\n")
+                print("  管理命令:")
+                print("    cam daemon status")
+                print("    cam daemon stop")
+                print("    cam daemon ping\n")
             else:
                 print(f"{C.YELLOW}⚠️  Daemon started but not yet online.{C.END}")
-                print(f"  Check: cam daemon status")
-                print(f"  Logs:  .daemon/daemon.log\n")
+                print("  Check: cam daemon status")
+                print("  Logs:  .daemon/daemon.log\n")
             return
         else:
             # Child: exec the daemon
@@ -169,8 +179,8 @@ def cmd_daemon_start(rest_args=None):
     # Windows path (no fork)
     time.sleep(1.5)
     print(f"{C.GREEN}✅ Daemon starting (PID {proc.pid}){C.END}\n")
-    print(f"  检查状态: cam daemon status")
-    print(f"  停止运行: cam daemon stop\n")
+    print("  检查状态: cam daemon status")
+    print("  停止运行: cam daemon stop\n")
 
 
 def cmd_daemon_stop():
@@ -207,8 +217,9 @@ def cmd_daemon_stop():
             # Try graceful shutdown via API first
             try:
                 import urllib.request
+
                 req = urllib.request.Request(
-                    f"http://127.0.0.1:9877/shutdown",
+                    "http://127.0.0.1:9877/shutdown",
                     method="POST",
                 )
                 urllib.request.urlopen(req, timeout=3)
@@ -234,7 +245,7 @@ def cmd_daemon_stop():
             stopped = True
             break
 
-        except (ValueError, ProcessLookupError, FileNotFoundError) as e:
+        except (ValueError, ProcessLookupError, FileNotFoundError):
             ppath.unlink(missing_ok=True)
 
     if stopped:
@@ -245,7 +256,7 @@ def cmd_daemon_stop():
 
 def cmd_daemon_restart(rest_args=None):
     """Restart the daemon."""
-    print(f"🔄 Restarting Daemon...\n")
+    print("🔄 Restarting Daemon...\n")
     cmd_daemon_stop()
     time.sleep(2)
     cmd_daemon_start(rest_args)
@@ -292,10 +303,11 @@ def cmd_daemon_status():
                     host = cfg.get("host", "127.0.0.1")
                     try:
                         import urllib.request
+
                         req = urllib.request.Request(f"http://{host}:{port}/health")
                         with urllib.request.urlopen(req, timeout=3) as resp:
                             hdata = json.loads(resp.read().decode())
-                        print(f"\n  API:   {C.GREEN}在线{C.END} (v{hdata.get('version','?')})")
+                        print(f"\n  API:   {C.GREEN}在线{C.END} (v{hdata.get('version', '?')})")
                     except Exception:
                         print(f"\n  API:   {C.YELLOW}离线（进程存在但API无响应）{C.END}")
                 found = True
@@ -314,6 +326,7 @@ def cmd_daemon_ping():
     """Quick ping — just checks if daemon responds."""
     try:
         import urllib.request
+
         start = time.time()
         req = urllib.request.Request(
             "http://127.0.0.1:9877/health",
@@ -324,8 +337,7 @@ def cmd_daemon_ping():
             elapsed_ms = (time.time() - start) * 1000
 
             if data.get("status") == "healthy":
-                print(f"{C.GREEN}● Daemon 在线{C.END} "
-                      f"({elapsed_ms:.0f}ms) v{data.get('version','?')}")
+                print(f"{C.GREEN}● Daemon 在线{C.END} ({elapsed_ms:.0f}ms) v{data.get('version', '?')}")
             else:
                 print(f"{C.RED}● Daemon 异常: {data}{C.END}")
     except Exception as e:
@@ -334,9 +346,11 @@ def cmd_daemon_ping():
 
 # ── Helpers ───────────────────────────────────────────────────
 
+
 def find_wiki_root_silent():
     """Find wiki root without printing errors."""
     from pathlib import Path
+
     CLAUDE_FILE = "schema/CLAUDE.md"
     current = Path(os.getcwd())
     while current != current.parent:

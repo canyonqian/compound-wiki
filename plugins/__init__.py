@@ -27,11 +27,11 @@ Architecture:
 
 Usage:
     from plugins import CamMCP, SourceRegistry
-    
+
     # Start MCP server for AI tools
     server = CamMCP()
     server.run()
-    
+
     # Register custom source
     registry = SourceRegistry()
     registry.register("my_custom", MyCustomSource())
@@ -47,14 +47,17 @@ from .base import (
 from .mcp_server import server as _mcp_server, run_mcp_server
 from .sources import SourceRegistry, get_all_sources
 
+
 # Backward-compatible alias: CamMCP wraps the server
 class CamMCP:
     """Wrapper around the MCP server instance."""
+
     def __init__(self):
         self._server = _mcp_server
-    
+
     def run(self, transport="stdio"):
         run_mcp_server(transport)
+
 
 __all__ = [
     "BaseSource",

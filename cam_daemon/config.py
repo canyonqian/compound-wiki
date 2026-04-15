@@ -10,17 +10,18 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
 
 @dataclass
 class LLMConfig:
     """LLM provider configuration for knowledge extraction."""
-    provider: str = "openai"          # "openai" | "anthropic" | "ollama"
-    model: str = "gpt-4o-mini"       # Extraction model (cheap is fine)
+
+    provider: str = "openai"  # "openai" | "anthropic" | "ollama"
+    model: str = "gpt-4o-mini"  # Extraction model (cheap is fine)
     api_key: str = ""
-    base_url: str = ""                # Override API base URL (e.g., proxy)
-    temperature: float = 0.1          # Low temp for consistent extraction
+    base_url: str = ""  # Override API base URL (e.g., proxy)
+    temperature: float = 0.1  # Low temp for consistent extraction
     max_tokens: int = 1024
 
     @classmethod
@@ -37,6 +38,7 @@ class LLMConfig:
 @dataclass
 class DaemonConfig:
     """Full daemon configuration."""
+
     wiki_path: str = "./wiki"
     raw_path: str = "./raw"
     port: int = 9877
@@ -46,16 +48,16 @@ class DaemonConfig:
     llm: LLMConfig = field(default_factory=LLMConfig.from_env)
 
     # Throttling
-    throttle_interval_sec: float = 10.0   # Minimum seconds between same-content hooks
-    throttle_window_size: int = 50         # Hash history window
+    throttle_interval_sec: float = 10.0  # Minimum seconds between same-content hooks
+    throttle_window_size: int = 50  # Hash history window
 
     # Deduplication
     dedup_similarity_threshold: float = 0.85
 
     # Scheduler
-    lint_schedule_cron: str = "0 8 * * *"     # Daily at 08:00
-    index_rebuild_interval_min: int = 60       # Rebuild index every hour
-    stats_log_interval_min: int = 30           # Log stats every 30min
+    lint_schedule_cron: str = "0 8 * * *"  # Daily at 08:00
+    index_rebuild_interval_min: int = 60  # Rebuild index every hour
+    stats_log_interval_min: int = 30  # Log stats every 30min
 
     # File paths
     pid_file: str = ""
@@ -64,17 +66,11 @@ class DaemonConfig:
 
     def __post_init__(self):
         if not self.pid_file:
-            self.pid_file = str(
-                Path(self.wiki_path).parent / ".daemon" / "cam-daemon.pid"
-            )
+            self.pid_file = str(Path(self.wiki_path).parent / ".daemon" / "cam-daemon.pid")
         if not self.state_file:
-            self.state_file = str(
-                Path(self.wiki_path).parent / ".daemon" / "state.json"
-            )
+            self.state_file = str(Path(self.wiki_path).parent / ".daemon" / "state.json")
         if not self.log_file:
-            self.log_file = str(
-                Path(self.wiki_path).parent / ".daemon" / "daemon.log"
-            )
+            self.log_file = str(Path(self.wiki_path).parent / ".daemon" / "daemon.log")
 
     @classmethod
     def load(cls, path: Optional[str] = None, **overrides) -> "DaemonConfig":
@@ -102,14 +98,9 @@ class DaemonConfig:
 
     def save(self, path: Optional[str] = None) -> str:
         """Save current config to JSON file."""
-        save_path = path or str(
-            Path(self.wiki_path).parent / "cam-daemon.json"
-        )
+        save_path = path or str(Path(self.wiki_path).parent / "cam-daemon.json")
 
-        data = {
-            k: v for k, v in self.__dict__.items()
-            if k not in ("llm",)
-        }
+        data = {k: v for k, v in self.__dict__.items() if k not in ("llm",)}
         data["llm"] = self.llm.__dict__
 
         os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)

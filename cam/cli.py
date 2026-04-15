@@ -29,13 +29,13 @@ CAM CLI — 一行命令管理你的 AI 知识库
 import os
 import sys
 import re
-import json
 from datetime import datetime
 from pathlib import Path
 
 # ============================================================
 # 颜色输出（跨平台兼容）
 # ============================================================
+
 
 class C:
     RED = "\033[91m" if os.name != "nt" else ""
@@ -83,7 +83,7 @@ def ensure_wiki_root():
     root = find_wiki_root()
     if not root:
         print(f"{C.RED}❌ 错误: 未找到 CAM 项目{C.END}")
-        print(f"\n请先初始化一个项目:")
+        print("\n请先初始化一个项目:")
         print(f"  {C.CYAN}cam init <路径>{C.END}")
         sys.exit(1)
     return root
@@ -93,11 +93,7 @@ def get_all_md_files(directory):
     """获取目录下所有 .md 文件"""
     if not os.path.exists(directory):
         return []
-    return [
-        os.path.join(directory, f)
-        for f in os.listdir(directory)
-        if f.endswith(".md") and not f.startswith(".")
-    ]
+    return [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(".md") and not f.startswith(".")]
 
 
 def extract_frontmatter(content):
@@ -127,10 +123,11 @@ def extract_links(content):
 # 命令实现
 # ============================================================
 
+
 def cmd_init(path="."):
     """
     初始化一个新的 CAM 项目。
-    
+
     创建完整的目录结构、复制规则文件模板、生成 .gitkeep。
     这就是「开箱即用」的核心入口。
     """
@@ -139,7 +136,7 @@ def cmd_init(path="."):
     # 检查目标是否已有内容
     if target.exists() and any(target.iterdir()):
         print(f"{C.YELLOW}⚠️  目录 {target} 已存在且有内容{C.END}")
-        print(f"将在现有目录中创建缺失的文件/文件夹...\n")
+        print("将在现有目录中创建缺失的文件/文件夹...\n")
 
     # 完整的目录结构
     dirs = {
@@ -157,7 +154,7 @@ def cmd_init(path="."):
 
     print(f"{C.BOLD}{C.BLUE}🧠 CAM v{VERSION}{C.END}")
     print(f"{C.BOLD}   AI 驱动的复利记忆系统{C.END}\n")
-    print(f"🚀 正式始初始化...")
+    print("🚀 正式始初始化...")
     print(f"   📍 目标目录: {target}\n")
 
     for rel_dir, placeholder_content in dirs.items():
@@ -167,8 +164,14 @@ def cmd_init(path="."):
 
     # 写入 .gitkeep 到空目录
     gitkeep_dirs = [
-        RAW_DIR, CONCEPT_DIR, ENTITY_DIR, SYNTHESIS_DIR,
-        OUTPUTS_DIR, ".cam_core", "auto/logs", "auto/state",
+        RAW_DIR,
+        CONCEPT_DIR,
+        ENTITY_DIR,
+        SYNTHESIS_DIR,
+        OUTPUTS_DIR,
+        ".cam_core",
+        "auto/logs",
+        "auto/state",
         "examples/raw-sample",
     ]
     for gd in gitkeep_dirs:
@@ -217,7 +220,7 @@ def cmd_init(path="."):
     # 写入 wiki/index.md 如果不存在
     index_path = target / INDEX_FILE
     if not index_path.exists():
-        index_content = f"""# CAM — 全局索引
+        index_content = """# CAM — 全局索引
 
 > 自动维护，**不要手动编辑**
 
@@ -261,12 +264,12 @@ _(暂无)_
     print(f"下一步操作 ({C.DIM}3 步开始使用{C.END}):")
     print(f"  1️⃣  {C.CYAN}cd {target.name}{C.END}")
     print(f"  2️⃣  编辑 {C.CYAN}schema/CLAUDE.md{C.END} 定义知识库规则")
-    print(f"  3️⃣  复制视角偏好:")
+    print("  3️⃣  复制视角偏好:")
     print(f"      {C.DIM}cp schema/PERSPECTIVE.example.md schema/PERSPECTIVE.md{C.END}")
     print()
-    print(f"然后就可以用了:")
+    print("然后就可以用了:")
     print(f"  📥 把资料扔进 {C.CYAN}raw/{C.END}")
-    print(f"  🤖 对 AI 说 {C.CYAN}\"INGEST\"{C.END} 或运行 {C.CYAN}cam ingest{C.END}")
+    print(f'  🤖 对 AI 说 {C.CYAN}"INGEST"{C.END} 或运行 {C.CYAN}cam ingest{C.END}')
     print(f"  📊 查看: {C.CYAN}cam stats{C.END} / {C.CYAN}cam lint{C.END}")
     print()
 
@@ -289,7 +292,7 @@ def cmd_lint(wiki_root=None):
     total_pages = len(all_files)
 
     if total_pages == 0:
-        print(f"  ℹ️  Wiki 为空。\n  💡 将资料放入 raw/ 后执行 INGEST。")
+        print("  ℹ️  Wiki 为空。\n  💡 将资料放入 raw/ 后执行 INGEST。")
         return
 
     for fp in all_files:
@@ -319,10 +322,13 @@ def cmd_lint(wiki_root=None):
         has_out = any(l.lower() in all_pages for l in out_links)
         has_in = len(in_links) > 0
         if not has_out and not has_in and total_pages > 1:
-            issues["warning"].append({
-                "type": "孤立页面", "file": fp,
-                "detail": f"(出链:{len(out_links)}, 入链:{len(in_links)})"
-            })
+            issues["warning"].append(
+                {
+                    "type": "孤立页面",
+                    "file": fp,
+                    "detail": f"(出链:{len(out_links)}, 入链:{len(in_links)})",
+                }
+            )
 
     # 待建链接
     unresolved = set()
@@ -334,7 +340,13 @@ def cmd_lint(wiki_root=None):
     for link in sorted(unresolved):
         ref_count = sum(1 for ls in link_map.values() for l in ls if l.lower() == link.lower())
         if ref_count >= 2:
-            issues["hint"].append({"type": "待建链接", "link": link, "detail": f"被 {ref_count} 个页面引用"})
+            issues["hint"].append(
+                {
+                    "type": "待建链接",
+                    "link": link,
+                    "detail": f"被 {ref_count} 个页面引用",
+                }
+            )
         else:
             issues["info"].append({"type": "未解析链接", "link": link})
 
@@ -346,23 +358,32 @@ def cmd_lint(wiki_root=None):
             fm = extract_frontmatter(content)
             missing = [f for f in required_fields if f not in fm]
             if missing:
-                issues["info"].append({
-                    "type": "Frontmatter 不完整", "file": fp,
-                    "detail": f"缺少: {', '.join(missing)}"
-                })
+                issues["info"].append(
+                    {
+                        "type": "Frontmatter 不完整",
+                        "file": fp,
+                        "detail": f"缺少: {', '.join(missing)}",
+                    }
+                )
         except Exception:
             pass
 
     # ---- 输出报告 ----
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     print(f"  ⏰ 时间: {now}")
-    print(f"  📄 页面: {total_pages} ({len(concept_files)} 概念 + {len(entity_files)} 实体 + {len(synthesis_files)} 综合)\n")
+    print(
+        f"  📄 页面: {total_pages} ({len(concept_files)} 概念 + {len(entity_files)} 实体 + {len(synthesis_files)} 综合)\n"
+    )
 
-    severity_order = [("severe", "🔴", "严重"), ("warning", "🟠", "中等"),
-                      ("info", "🔵", "低"), ("hint", "🟢", "提示")]
+    severity_order = [
+        ("severe", "🔴", "严重"),
+        ("warning", "🟠", "中等"),
+        ("info", "🔵", "低"),
+        ("hint", "🟢", "提示"),
+    ]
 
     total_issues = sum(len(issues[k]) for k in issues)
-    print(f"{C.BOLD}  问题汇总{C.END}  {'─'*35}")
+    print(f"{C.BOLD}  问题汇总{C.END}  {'─' * 35}")
 
     for key, icon, label in severity_order:
         count = len(issues[key])
@@ -392,15 +413,15 @@ def cmd_lint(wiki_root=None):
     score = max(0, min(100, max_score - deduction)) if max_score > 0 else 100
     color = C.GREEN if score >= 80 else (C.YELLOW if score >= 60 else C.RED)
 
-    print(f"\n{'─'*45}")
+    print(f"\n{'─' * 45}")
     print(f"  📊 健康评分: {color}{score}/100{C.END}")
 
     if score >= 80:
-        print(f"  ✅ 知识库状态良好！")
+        print("  ✅ 知识库状态良好！")
     elif score >= 60:
-        print(f"  ⚠️  有一些小问题需要处理。")
+        print("  ⚠️  有一些小问题需要处理。")
     else:
-        print(f"  ❌ 存在较多问题，建议执行维护。")
+        print("  ❌ 存在较多问题，建议执行维护。")
 
 
 def cmd_stats(wiki_root=None):
@@ -432,16 +453,16 @@ def cmd_stats(wiki_root=None):
     print(f"{C.BOLD}📊 CAM 统计{C.END}")
     print(f"   项目: {root}\n")
 
-    print(f"  📁 Wiki 页面:")
+    print("  📁 Wiki 页面:")
     print(f"     概念 (concept/):    {len(concept_files):>4}")
     print(f"     实体 (entity/):     {len(entity_files):>4}")
     print(f"     综合 (synthesis/):  {len(synthesis_files):>4}")
-    print(f"     {'─'*22}")
+    print(f"     {'─' * 22}")
     print(f"     合计:               {len(all_wiki):>4}")
     print(f"\n  📥 Raw 资料: {len(raw_files)} 个文件")
 
     if all_wiki:
-        print(f"\n  🔗 关联:")
+        print("\n  🔗 关联:")
         print(f"     双链总数:       {total_links}")
         print(f"     平均每页链接:   {total_links / len(all_wiki):.1f}")
         print(f"     总字数:         ~{total_words:,}")
@@ -449,12 +470,12 @@ def cmd_stats(wiki_root=None):
 
         if tags_set:
             tag_str = "  ".join(f"[{t}]" for t in sorted(tags_set)[:15])
-            print(f"\n  🏷️ 标签云:")
+            print("\n  🏷️ 标签云:")
             print(f"     {tag_str}")
             if len(tags_set) > 15:
                 print(f"     ... 等 {len(tags_set)} 个标签")
 
-    print(f"\n  🕒 最近更新:")
+    print("\n  🕒 最近更新:")
     if all_wiki:
         recent = sorted(all_wiki, key=lambda f: os.path.getmtime(f), reverse=True)[:5]
         for fp in recent:
@@ -462,7 +483,7 @@ def cmd_stats(wiki_root=None):
             rel = os.path.relpath(fp, root)
             print(f"     {mtime}  {rel}")
     else:
-        print(f"     (暂无内容)")
+        print("     (暂无内容)")
 
 
 def cmd_status(wiki_root=None):
@@ -483,7 +504,7 @@ def cmd_status(wiki_root=None):
             (".cam_core/", "Memory Core"),
             ("auto/config.json", "自动引擎"),
         ]
-        print(f"\n  模块状态:")
+        print("\n  模块状态:")
         for path_item, label in checks:
             full = os.path.join(root, path_item)
             exists = os.path.exists(full)
@@ -506,7 +527,7 @@ def cmd_ingest(wiki_root=None):
     print(f"{C.BOLD}📥 INGEST — 处理原始资料{C.END}\n")
 
     if not files:
-        print(f"  📭 raw/ 为空")
+        print("  📭 raw/ 为空")
         print(f"\n  把资料 (.md/.txt) 放入 {C.CYAN}raw/{C.END} 后重新运行此命令。")
         return
 
@@ -514,18 +535,18 @@ def cmd_ingest(wiki_root=None):
     for f in sorted(files)[:20]:
         fp = os.path.join(raw_dir, f)
         size = os.path.getsize(fp)
-        sz = f"{size/1024:.1f}KB" if size > 1024 else f"{size}B"
+        sz = f"{size / 1024:.1f}KB" if size > 1024 else f"{size}B"
         ext = os.path.splitext(f)[1].lower()
-        icon = {"md":"📝","txt":"📄","pdf":"📕","png":"🖼️","jpg":"🖼️"}.get(ext, "📎")
+        icon = {"md": "📝", "txt": "📄", "pdf": "📕", "png": "🖼️", "jpg": "🖼️"}.get(ext, "📎")
         print(f"    {icon} {f:<40} {sz:>8}")
 
     if len(files) > 20:
-        print(f"    ... 还有 {len(files)-20} 个文件")
+        print(f"    ... 还有 {len(files) - 20} 个文件")
 
     print(f"\n  {C.BOLD}{C.YELLOW}→ 请对 AI Agent 发出以下指令:{C.END}")
-    print(f"  {C.DIM}\"请读取 raw/ 目录中的所有新文件，按照 schema/CLAUDE.md 的规则")
-    print(f"   提取核心概念和实体，创建/更新 Wiki 页面，建立 [[双链]] 关联，")
-    print(f"   更新 wiki/index.md 和 wiki/changelog.md。\"{C.END}")
+    print(f'  {C.DIM}"请读取 raw/ 目录中的所有新文件，按照 schema/CLAUDE.md 的规则')
+    print("   提取核心概念和实体，创建/更新 Wiki 页面，建立 [[双链]] 关联，")
+    print(f'   更新 wiki/index.md 和 wiki/changelog.md。"{C.END}')
 
 
 def cmd_query(question, wiki_root=None):
@@ -533,14 +554,14 @@ def cmd_query(question, wiki_root=None):
     root = wiki_root or ensure_wiki_root()
 
     if not question:
-        print(f"用法: {C.CYAN}cam query \"你的问题\"{C.END}")
-        print(f"\n示例:")
-        print(f"  cam query \"什么是 RAG？\"")
-        print(f"  cam query \"我们选了什么数据库？\"")
+        print(f'用法: {C.CYAN}cam query "你的问题"{C.END}')
+        print("\n示例:")
+        print('  cam query "什么是 RAG？"')
+        print('  cam query "我们选了什么数据库？"')
         return
 
     print(f"{C.BOLD}❓ QUERY — 知识库查询{C.END}\n")
-    print(f"  问题: {C.CYAN}\"{question}\"{C.END}")
+    print(f'  问题: {C.CYAN}"{question}"{C.END}')
     print(f"\n  {C.YELLOW}→ 请对 AI Agent 发出:{C.END}")
     print(f"  {C.DIM}\"基于 wiki/ 中的内容回答: '{question}'\"{C.END}")
 
@@ -548,7 +569,7 @@ def cmd_query(question, wiki_root=None):
 def cmd_version():
     """显示版本信息"""
     print(f"CAM v{VERSION}")
-    print(f"AI-driven compound interest memory system")
+    print("AI-driven compound interest memory system")
     print(f"\n安装位置: {os.path.dirname(os.path.dirname(__file__))}")
 
 
@@ -592,6 +613,7 @@ def cmd_help():
 # 主入口
 # ============================================================
 
+
 def main():
     """CLI 主入口 — 被 pyproject.toml 的 [project.scripts] 引用"""
     args = sys.argv[1:]
@@ -605,8 +627,7 @@ def main():
 
     dispatch = {
         "init": lambda: cmd_init(
-            (rest[1] if len(rest) > 1 and rest[0] in ("--dir", "-d") else rest[0])
-            if rest else "."
+            (rest[1] if len(rest) > 1 and rest[0] in ("--dir", "-d") else rest[0]) if rest else "."
         ),
         "lint": lambda: cmd_lint(rest[0] if rest else None),
         "stats": lambda: cmd_stats(rest[0] if rest else None),
@@ -647,13 +668,10 @@ def cmd_check_raw(wiki_root=None):
     raw_dir = os.path.join(root, RAW_DIR)
 
     if not os.path.exists(raw_dir):
-        print(f"ℹ️  raw/ 目录不存在")
+        print("ℹ️  raw/ 目录不存在")
         return
 
-    raw_files = sorted(
-        f for f in os.listdir(raw_dir)
-        if not f.startswith(".") and f != ".gitkeep"
-    )
+    raw_files = sorted(f for f in os.listdir(raw_dir) if not f.startswith(".") and f != ".gitkeep")
 
     print(f"{C.BOLD}📥 Raw 资料清单{C.END}\n")
 
@@ -666,19 +684,19 @@ def cmd_check_raw(wiki_root=None):
         fpath = os.path.join(raw_dir, fname)
         size = os.path.getsize(fpath)
         total_size += size
-        size_str = f"{size/1024:.1f}KB" if size > 1024 else f"{size}B"
+        size_str = f"{size / 1024:.1f}KB" if size > 1024 else f"{size}B"
         ext = os.path.splitext(fname)[1].lower()
         icon = {"md": "📝", "txt": "📄", "pdf": "📕", "png": "🖼️", "jpg": "🖼️"}.get(ext, "📎")
         print(f"  {i}. {icon} {fname:<40} {size_str:>8}")
 
-    print(f"\n  共 {len(raw_files)} 个文件, 总大小: {total_size/1024:.1f} KB")
+    print(f"\n  共 {len(raw_files)} 个文件, 总大小: {total_size / 1024:.1f} KB")
 
 
 def cmd_collect(url):
     """抓取 URL 并存入 raw/"""
     if not url:
         print(f"用法: {C.CYAN}cam collect <URL>{C.END}")
-        print(f"\n示例: cam collect https://example.com/article")
+        print("\n示例: cam collect https://example.com/article")
         return
 
     print(f"{C.BOLD}🌐 COLLECT — 抓取网页{C.END}")
@@ -692,11 +710,12 @@ def cmd_start():
     print(f"{C.BOLD}⚡ START — 启动自动化引擎{C.END}")
     print(f"\n  {C.YELLOW}需要安装自动化依赖:{C.END}")
     print(f"  {C.DIM}pip install 'cam[auto]'${C.END}")
-    print(f"\n  或者直接运行:")
+    print("\n  或者直接运行:")
     print(f"  {C.DIM}python auto/agent.py start{C.END}")
 
 
 # ── Daemon 子命令 (v2 新增) ────────────────────────────────
+
 
 def cmd_daemon():
     """Daemon 命令路由 — cam daemon [start|stop|status]"""
@@ -735,7 +754,7 @@ def cmd_daemon():
         handler()
     else:
         print(f"{C.RED}未知 daemon 命令: {sub_cmd}{C.END}")
-        print(f"可用: start | stop | restart | status | ping")
+        print("可用: start | stop | restart | status | ping")
         sys.exit(1)
 
 

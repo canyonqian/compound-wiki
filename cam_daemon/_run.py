@@ -28,9 +28,9 @@ if _PROJECT_ROOT not in sys.path:
 def setup_logging(log_path: str = ""):
     """Configure daemon logging."""
     log_format = "%(asctime)s [%(name)s] %(levelname)s %(message)s"
-    
+
     handlers = [logging.StreamHandler(sys.stdout)]
-    
+
     if log_path:
         os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
         file_handler = logging.FileHandler(log_path, encoding="utf-8")
@@ -48,44 +48,44 @@ async def main(config_path: str):
     """Main entry point — load config, start engine, serve."""
     from cam_daemon.config import DaemonConfig
     from cam_daemon.daemon import DaemonManager
-    
+
     # Load config
     if not os.path.exists(config_path):
         print(f"ERROR: Config file not found: {config_path}", file=sys.stderr)
         sys.exit(1)
-    
+
     with open(config_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    
+
     # Parse LLM sub-config
     llm_data = data.pop("llm", {})
     config = DaemonConfig(**data)
-    
+
     # Override LLM settings
     for k, v in llm_data.items():
         if hasattr(config.llm, k):
             setattr(config.llm, k, v)
-    
+
     # Setup logging
     setup_logging(config.log_file)
     logger = logging.getLogger("cam_daemon")
     logger.info("=== CAM Daemon v3 Starting ===")
     logger.info(f"Config: {config_path}")
-    
+
     # Create manager & start
     manager = DaemonManager(config)
-    
+
     await manager.start()
     await manager.run_forever()
 
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="CAM Daemon")
     parser.add_argument("--config", required=True, help="Path to config JSON")
     args = parser.parse_args()
-    
+
     try:
         asyncio.run(main(args.config))
     except KeyboardInterrupt:

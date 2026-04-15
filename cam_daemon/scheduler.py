@@ -10,7 +10,6 @@ Runs periodic maintenance tasks:
 """
 
 import asyncio
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -49,25 +48,30 @@ class CamScheduler:
         stats_interval = self.config.stats_log_interval_min * 60
 
         self._tasks = [
-            asyncio.create_task(self._task_loop(
-                name="index-rebuild",
-                func=self._rebuild_index,
-                interval_sec=index_interval,
-            )),
-            asyncio.create_task(self._task_loop(
-                name="stats-log",
-                func=self._log_stats,
-                interval_sec=stats_interval,
-            )),
-            asyncio.create_task(self._task_loop(
-                name="daily-lint",
-                func=self._run_lint,
-                interval_sec=lint_interval,
-            )),
+            asyncio.create_task(
+                self._task_loop(
+                    name="index-rebuild",
+                    func=self._rebuild_index,
+                    interval_sec=index_interval,
+                )
+            ),
+            asyncio.create_task(
+                self._task_loop(
+                    name="stats-log",
+                    func=self._log_stats,
+                    interval_sec=stats_interval,
+                )
+            ),
+            asyncio.create_task(
+                self._task_loop(
+                    name="daily-lint",
+                    func=self._run_lint,
+                    interval_sec=lint_interval,
+                )
+            ),
         ]
 
-        logger.info(f"Scheduler started: index={index_interval}s, "
-                     f"stats={stats_interval}s, lint={lint_interval}s")
+        logger.info(f"Scheduler started: index={index_interval}s, stats={stats_interval}s, lint={lint_interval}s")
 
     async def stop(self) -> None:
         """Cancel all scheduled tasks."""
@@ -156,12 +160,14 @@ class CamScheduler:
                 content = await self.engine.wiki.read_page(page["path"])
                 if not content or len(content.strip()) < 50:
                     empty_pages += 1
-                    issues.append({
-                        "severity": "warning",
-                        "type": "empty_page",
-                        "page": page["path"],
-                        "message": f"Page is nearly empty ({len(content or '')} bytes)",
-                    })
+                    issues.append(
+                        {
+                            "severity": "warning",
+                            "type": "empty_page",
+                            "page": page["path"],
+                            "message": f"Page is nearly empty ({len(content or '')} bytes)",
+                        }
+                    )
 
                 # Count fact blocks
                 fact_blocks = content.count("---") // 2 if content else 0
@@ -169,12 +175,14 @@ class CamScheduler:
 
                 if page["size_bytes"] > 50000:
                     large_pages += 1
-                    issues.append({
-                        "severity": "info",
-                        "type": "large_page",
-                        "page": page["path"],
-                        "message": f"Page is very large ({page['size_bytes']} bytes)",
-                    })
+                    issues.append(
+                        {
+                            "severity": "info",
+                            "type": "large_page",
+                            "page": page["path"],
+                            "message": f"Page is very large ({page['size_bytes']} bytes)",
+                        }
+                    )
 
             # Write LINT report
             report_path = Path(self.config.wiki_path) / ".lint-reports"
@@ -185,7 +193,7 @@ class CamScheduler:
 
             report_lines = [
                 f"# Wiki LINT Report — {today}\n",
-                f"\n## Summary\n",
+                "\n## Summary\n",
                 f"- **Total pages**: {len(pages)}",
                 f"- **Total fact blocks**: ~{total_facts}",
                 f"- **Empty/near-empty**: {empty_pages}",
@@ -198,16 +206,13 @@ class CamScheduler:
                 for i, issue in enumerate(issues, 1):
                     emoji = {"error": "🔴", "warning": "⚠️", "info": "ℹ️"}
                     icon = emoji.get(issue.get("severity", ""), "•")
-                    report_lines.append(
-                        f"{i}. {icon} [{issue['page']}] {issue['message']}"
-                    )
+                    report_lines.append(f"{i}. {icon} [{issue['page']}] {issue['message']}")
             else:
                 report_lines.append("\n✅ No issues found. Wiki is healthy!\n")
 
             report_file.write_text("\n".join(report_lines), encoding="utf-8")
 
-            logger.info(f"[scheduler] LINT complete: "
-                         f"{len(pages)} pages, {len(issues)} issues")
+            logger.info(f"[scheduler] LINT complete: {len(pages)} pages, {len(issues)} issues")
 
         except Exception as e:
             logger.error(f"[scheduler] LINT failed: {e}", exc_info=True)

@@ -16,29 +16,31 @@ from typing import Any, Dict, List, Optional
 
 class SourceType(Enum):
     """Supported source types."""
-    API = "api"                  # REST / GraphQL API endpoint
-    BROWSER = "browser"          # Browser extension / bookmarklet
-    CLIPBOARD = "clipboard"      # System clipboard monitor
-    EMAIL = "email"              # IMAP email watcher
-    RSS = "rss"                  # RSS / Atom feed reader
-    BOT = "bot"                  # Telegram / Discord / WeChat bot
-    FILE_WATCH = "file_watch"    # File system watcher
-    CUSTOM = "custom"            # User-defined custom source
-    WEBHOOK = "webhook"         # Incoming webhook (e.g. Zapier)
+
+    API = "api"  # REST / GraphQL API endpoint
+    BROWSER = "browser"  # Browser extension / bookmarklet
+    CLIPBOARD = "clipboard"  # System clipboard monitor
+    EMAIL = "email"  # IMAP email watcher
+    RSS = "rss"  # RSS / Atom feed reader
+    BOT = "bot"  # Telegram / Discord / WeChat bot
+    FILE_WATCH = "file_watch"  # File system watcher
+    CUSTOM = "custom"  # User-defined custom source
+    WEBHOOK = "webhook"  # Incoming webhook (e.g. Zapier)
 
 
 class ContentType(Enum):
     """Content type classification."""
-    ARTICLE = "article"          # News article, blog post
-    PAPER = "paper"             # Academic paper / research
-    NOTE = "note"              # Personal note, thought
-    BOOKMARK = "bookmark"       # URL bookmark (content not fetched yet)
-    CODE = "code"              # Code snippet, gist
-    IMAGE = "image"            # Image with text (OCR)
-    PDF = "pdf"                # PDF document
+
+    ARTICLE = "article"  # News article, blog post
+    PAPER = "paper"  # Academic paper / research
+    NOTE = "note"  # Personal note, thought
+    BOOKMARK = "bookmark"  # URL bookmark (content not fetched yet)
+    CODE = "code"  # Code snippet, gist
+    IMAGE = "image"  # Image with text (OCR)
+    PDF = "pdf"  # PDF document
     CONVERSATION = "conversation"  # Chat log, interview transcript
-    TWEET = "tweet"            # Social media post
-    VIDEO = "video"            # Video transcript
+    TWEET = "tweet"  # Social media post
+    VIDEO = "video"  # Video transcript
     UNKNOWN = "unknown"
 
 
@@ -46,10 +48,10 @@ class ContentType(Enum):
 class IngestItem:
     """
     A single item to be ingested into the knowledge base.
-    
+
     This is the universal data format that all sources produce.
     The pipeline then processes each item into Wiki pages.
-    
+
     Attributes:
         content: The raw content text (required)
         title: Human-readable title
@@ -62,6 +64,7 @@ class IngestItem:
         priority: 1=low, 2=normal, 3=high, 4=urgent
         created_at: When this item was created
     """
+
     content: str
     title: str = ""
     url: str = ""
@@ -75,19 +78,28 @@ class IngestItem:
 
     def to_raw_path(self, base_dir: Path) -> Path:
         """Generate a safe filename for storage in raw/."""
-        safe_title = self.title[:50].replace("/", "-").replace("\\", "-") \
-            .replace(":", "-").replace("*", "-").replace("?", "-") \
-            .replace("\"", "").replace("<", "").replace(">", "").replace("|", "-")
+        safe_title = (
+            self.title[:50]
+            .replace("/", "-")
+            .replace("\\", "-")
+            .replace(":", "-")
+            .replace("*", "-")
+            .replace("?", "-")
+            .replace('"', "")
+            .replace("<", "")
+            .replace(">", "")
+            .replace("|", "-")
+        )
         if not safe_title or safe_title.strip("-") == "":
             safe_title = f"untitled_{self.created_at.strftime('%Y%m%d_%H%M%S')}"
-        
+
         timestamp = self.created_atstrftime("%Y%m%d_%H%M%S")
         ext = ".md"
         if self.content_type == ContentType.PDF:
             ext = ".txt"
         elif self.source_type == SourceType.CODE:
             ext = self.metadata.get("extension", ".md")
-        
+
         return base_dir / f"{timestamp}_{safe_title}{ext}"
 
 
@@ -95,7 +107,7 @@ class IngestItem:
 class IngestResult:
     """
     Result of processing an ingest item.
-    
+
     Attributes:
         success: Whether processing succeeded
         item: The original item
@@ -105,6 +117,7 @@ class IngestResult:
         error: Error details if failed
         processed_at: When processing completed
     """
+
     success: bool
     item: IngestItem
     raw_path: Optional[Path] = None
@@ -118,7 +131,7 @@ class IngestResult:
 class SourceConfig:
     """
     Configuration for a data source plugin.
-    
+
     Attributes:
         enabled: Whether this source is active
         name: Display name
@@ -129,6 +142,7 @@ class SourceConfig:
         rate_limit: Max items per minute (0 = unlimited)
         filters: Content filtering rules
     """
+
     enabled: bool = True
     name: str = ""
     source_type: SourceType = SourceType.CUSTOM
@@ -142,32 +156,32 @@ class SourceConfig:
 class BaseSource(ABC):
     """
     Abstract base class for all data sources.
-    
+
     To create a custom source:
         class MySource(BaseSource):
             @property
             def source_type(self) -> SourceType:
                 return SourceType.CUSTOM
-            
+
             @property
             def display_name(self) -> str:
                 return "My Custom Source"
-            
+
             async def start(self):
                 # Initialize connections, auth, etc.
                 pass
-            
+
             async def stop(self):
                 # Clean up resources
                 pass
-            
+
             async def collect(self) -> List[IngestItem]:
                 # Return new items to ingest
                 return []
-            
+
             async def health_check(self) -> Dict[str, Any]:
                 return {"status": "ok"}
-    
+
     Lifecycle:
         start() → [collect() loop] → stop()
     """
@@ -201,7 +215,7 @@ class BaseSource(ABC):
     async def start(self) -> None:
         """
         Start the source.
-        
+
         Called once before collect() loop begins.
         Use for initialization: open connections, authenticate, etc.
         """
@@ -210,7 +224,7 @@ class BaseSource(ABC):
     async def stop(self) -> None:
         """
         Stop the source.
-        
+
         Called when shutting down.
         Clean up all resources: close connections, release handles, etc.
         """
@@ -220,11 +234,11 @@ class BaseSource(ABC):
     async def collect(self) -> List[IngestItem]:
         """
         Collect new items from this source.
-        
+
         Returns:
             List of new IngestItems ready for ingestion.
             Return empty list if nothing new.
-        
+
         Note:
             This method will be called repeatedly in a loop.
             Implement your own polling/event logic inside.
@@ -235,7 +249,7 @@ class BaseSource(ABC):
     async def health_check(self) -> Dict[str, Any]:
         """
         Check if the source is healthy and working.
-        
+
         Returns:
             Dict with at least 'status' key ('ok', 'warning', 'error').
         """
@@ -249,13 +263,13 @@ class BaseSource(ABC):
     def validate_item(self, item: IngestItem) -> bool:
         """
         Validate an item before accepting it.
-        
+
         Override to add custom validation logic.
         Returns False to reject the item.
         """
         if not item.content or len(item.content.strip()) < 10:
             return False
-        
+
         # Check filters from config
         filters = self.config.filters
         if filters.get("min_length", 0) > 0 and len(item.content) < filters["min_length"]:
@@ -265,7 +279,7 @@ class BaseSource(ABC):
             for kw in filters["block_keywords"]:
                 if kw.lower() in content_lower:
                     return False
-        
+
         return True
 
     def __repr__(self):
@@ -275,7 +289,7 @@ class BaseSource(ABC):
 class BaseAdapter(ABC):
     """
     Abstract base class for output adapters.
-    
+
     Adapters handle displaying/syncing Wiki content to external systems.
     Examples: Obsidian vault, Logseq graph, Web dashboard, etc.
     """
@@ -295,13 +309,10 @@ class BaseAdapter(ABC):
         """Human-readable name."""
         ...
 
-    async def on_wiki_update(self, 
-                             action: str, 
-                             page_path: str,
-                             content: Optional[str] = None):
+    async def on_wiki_update(self, action: str, page_path: str, content: Optional[str] = None):
         """
         Callback when Wiki content changes.
-        
+
         Args:
             action: 'create' | 'update' | 'delete' | 'link'
             page_path: Relative path of the changed page
@@ -312,7 +323,7 @@ class BaseAdapter(ABC):
     async def sync_all(self, wiki_dir: Path) -> Dict[str, Any]:
         """
         Perform a full sync of the Wiki to this adapter's target.
-        
+
         Returns:
             Sync result summary.
         """

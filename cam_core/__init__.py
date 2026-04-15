@@ -25,9 +25,15 @@ from cam_core.memory_graph import MemoryGraph, GraphNode, GraphEdge
 from cam_core.config import MemoryConfig
 
 __all__ = [
-    "FactExtractor", "ExtractionResult", "FactType",
-    "Deduplicator", "MergeAction",
-    "SharedWiki", "WikiTransaction",
-    "MemoryGraph", "GraphNode", "GraphEdge",
+    "FactExtractor",
+    "ExtractionResult",
+    "FactType",
+    "Deduplicator",
+    "MergeAction",
+    "SharedWiki",
+    "WikiTransaction",
+    "MemoryGraph",
+    "GraphNode",
+    "GraphEdge",
     "MemoryConfig",
 ]
