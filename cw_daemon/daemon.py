@@ -142,20 +142,14 @@ class DaemonManager:
         self._shutdown_event = asyncio.Event()
         await self._start_scheduler()
 
-        # Create server
+        # Create engine & register as global (needed by FastAPI handlers)
         from .server import create_server
-        self._uvicorn_server = None  # Created lazily in run_forever()
-        self._server_app = None
-
-        # Pre-create the app (for health checks before full startup)
-        if hasattr(create_server, '__module__'):
-            try:
-                from .server import HAS_FASTAPI, _engine_instance
-                if HAS_FASTAPI:
-                    from .server import app as fastapi_app
-                    self._server_app = fastapi_app
-            except Exception:
-                pass
+        from .server import _engine_instance as _ei_ref
+        create_server(  # This sets the global _engine_instance
+            engine=self._engine,
+            host=self.config.host,
+            port=self.config.port,
+        )
 
         self._running = True
         logger.info(f"✅ Daemon started (PID {pid})")
