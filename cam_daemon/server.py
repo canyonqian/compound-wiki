@@ -323,8 +323,8 @@ class CamEngine:
         try:
             result = await self.extractor.extract(
                 user_message=req.user_message,
-                ai_response=req.ai_response,
-                source=f"daemon:{req.agent_id}",
+                assistant_response=req.ai_response,
+                agent_id=f"daemon:{req.agent_id}",
             )
             return result if isinstance(result, list) else []
         except Exception as e:
@@ -337,7 +337,7 @@ class CamEngine:
         Simple rule-based extraction when LLM is unavailable.
         Catches common patterns like decisions, preferences, facts.
         """
-        from memory_core.extractor import FactType, Fact
+        from memory_core.extractor import FactType, ExtractedFact
 
         facts = []
         text = f"{req.user_message} {req.ai_response}"
@@ -347,14 +347,14 @@ class CamEngine:
         decision_patterns = [
             "we decided", "we choose", "i decided", "we will use",
             "we chose", "using ", "we're using", "deploy on",
-            "我们决定", "使用", "部署", "选择用",
+            "decided", "chose", "selected",
         ]
         for pat in decision_patterns:
             if pat.lower() in text.lower():
                 # Find the sentence containing the pattern
                 for sentence in text.split("."):
                     if pat in sentence.lower():
-                        facts.append(Fact(
+                        facts.append(ExtractedFact(
                             fact_type=FactType.DECISION,
                             content=sentence.strip(),
                             confidence=0.7,
@@ -372,12 +372,12 @@ class CamEngine:
             if pat.lower() in text.lower():
                 for sentence in text.split("."):
                     if pat in sentence.lower():
-                        facts.append(Fact(
+                        facts.append(ExtractedFact(
                             fact_type=FactType.PREFERENCE,
                             content=sentence.strip(),
                             confidence=0.65,
                             source_text=source_text,
-                            source_type="daemon_heuristic",
+                            agent_id="daemon-heuristic",
                         ))
                 break
 
@@ -390,12 +390,12 @@ class CamEngine:
         ]
         for entity in entity_patterns:
             if entity in text:
-                facts.append(Fact(
+                facts.append(ExtractedFact(
                     fact_type=FactType.ENTITY,
                     content=entity,
                     confidence=0.85,
                     source_text=source_text,
-                    source_type="daemon_heuristic",
+                    agent_id="daemon-heuristic",
                 ))
 
         return facts[:10]  # Cap at 10 heuristic facts
