@@ -150,9 +150,9 @@ def cmd_init(path="."):
         OUTPUTS_DIR: None,
         SCHEMA_DIR / "templates": None,
         ".memory_core": None,
-        "auto" / "logs": None,
-        "auto" / "state": None,
-        "examples" / "raw-sample": None,
+        Path("auto") / "logs": None,
+        Path("auto") / "state": None,
+        Path("examples") / "raw-sample": None,
     }
 
     print(f"{C.BOLD}{C.BLUE}🧠 Compound Wiki v{VERSION}{C.END}")
