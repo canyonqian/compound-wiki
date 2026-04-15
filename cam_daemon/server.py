@@ -454,14 +454,11 @@ class CamEngine:
 
     async def _deduplicate(self, facts: list) -> list:
         """Filter out facts already present in the Wiki."""
-        new_facts = []
-
-        for fact in facts:
-            is_dup = await self.deduplicator.is_duplicate(fact)
-            if not is_dup:
-                new_facts.append(fact)
-
-        return new_facts
+        if not facts or not self.deduplicator:
+            return facts
+        # Use Deduplicator's main entry point: deduplicate() → DedupResult
+        result = await self.deduplicator.deduplicate(facts)
+        return result.unique_facts if hasattr(result, 'unique_facts') else facts
 
     async def _write_facts(self, facts: list, agent_id: str) -> int:
         """Write facts to Wiki via atomic transaction."""
