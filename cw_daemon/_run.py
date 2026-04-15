@@ -46,8 +46,8 @@ def setup_logging(log_path: str = ""):
 
 async def main(config_path: str):
     """Main entry point — load config, start engine, serve."""
-    from .config import DaemonConfig
-    from .daemon import DaemonManager
+    from cw_daemon.config import DaemonConfig
+    from cw_daemon.daemon import DaemonManager
     
     # Load config
     if not os.path.exists(config_path):
