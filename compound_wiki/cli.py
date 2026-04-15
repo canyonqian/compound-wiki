@@ -56,7 +56,7 @@ VERSION = "2.0.0"
 
 WIKI_DIR = "wiki"
 RAW_DIR = "raw"
-SCHEMA_DIR = "schema"
+SCHEMA_DIR = Path("schema")
 OUTPUTS_DIR = "outputs"
 
 CONCEPT_DIR = os.path.join(WIKI_DIR, "concept")
