@@ -42,18 +42,32 @@ logger = logging.getLogger("cam_daemon.server")
 # ── Request/Response Models (used by both FastAPI and fallback) ───
 
 class HookRequest:
-    """Incoming conversation hook request."""
+    """Incoming conversation hook request.
+
+    Supports two modes:
+
+    Mode 1 — Agent-Native (recommended, zero cost):
+        Agent extracts facts using its own LLM, passes them in extracted_facts.
+        Daemon only does dedup + store. No API key needed.
+
+    Mode 2 — LLM Fallback (daemon-side extraction):
+        Only user_message + ai_response provided. Daemon calls
+        external LLM for extraction. Requires API key / Ollama.
+    """
     __slots__ = ("user_message", "ai_response", "agent_id", "session_id",
-                 "metadata")
+                 "metadata", "extracted_facts")
 
     def __init__(self, user_message: str = "", ai_response: str = "",
                  agent_id: str = "unknown", session_id: str = "",
-                 metadata: Dict[str, Any] = None):
+                 metadata: Dict[str, Any] = None,
+                 extracted_facts: Optional[List[Dict]] = None):
         self.user_message = user_message
         self.ai_response = ai_response
         self.agent_id = agent_id or "unknown"
         self.session_id = session_id
         self.metadata = metadata or {}
+        # Agent-Native facts: pre-extracted by the Agent itself
+        self.extracted_facts = extracted_facts or []
 
     @property
     def combined_content(self) -> str:
@@ -317,20 +331,56 @@ class CamEngine:
 
     async def _do_extraction(self, req: HookRequest) -> list:
         """
-        Use the extractor to pull structured facts from conversation.
-        Falls back gracefully if LLM is unavailable.
+        Extract facts from conversation.
+
+        Priority:
+          1. Agent-Native — use facts provided by the Agent itself (zero cost)
+          2. LLM Fallback  — call external LLM API (needs API key / Ollama)
+          3. Heuristic      — rule-based fallback (no LLM at all)
         """
+        from memory_core.extractor import FactType, ExtractedFact
+
+        # ── Mode 1: Agent-Native (preferred) ──
+        if req.extracted_facts:
+            logger.info(
+                f"[{req.agent_id}] Using Agent-Native mode: "
+                f"{len(req.extracted_facts)} pre-extracted facts"
+            )
+            parsed = []
+            for item in req.extracted_facts:
+                try:
+                    fact = ExtractedFact(
+                        fact_type=FactType(item.get("fact_type", "fact")),
+                        content=item.get("content", "").strip(),
+                        confidence=float(item.get("confidence", 0.85)),
+                        source_text=req.combined_content[:200],
+                        agent_id=req.agent_id,
+                        tags=item.get("tags", []),
+                        entities_mentioned=item.get("entities_mentioned", []),
+                    )
+                    if len(fact.content) >= 5:  # skip trivially short
+                        parsed.append(fact)
+                except (ValueError, KeyError) as e:
+                    logger.warning(f"Skipping malformed fact: {e}")
+            return parsed
+
+        # ── Mode 2: LLM Fallback (external API) ──
         try:
             result = await self.extractor.extract(
                 user_message=req.user_message,
                 assistant_response=req.ai_response,
                 agent_id=f"daemon:{req.agent_id}",
             )
-            return result if isinstance(result, list) else []
+            if isinstance(result, list):
+                return result
+            if hasattr(result, 'facts') and result.facts:
+                return result.facts
+            return []
         except Exception as e:
             logger.warning(f"LLM extraction failed, using heuristic: {e}")
-            # Heuristic fallback: extract basic patterns without LLM
-            return self._heuristic_extract(req)
+
+        # ── Mode 3: Heuristic (pure rules, no LLM) ──
+        return self._heuristic_extract(req)
 
     def _heuristic_extract(self, req: HookRequest) -> list:
         """
@@ -577,6 +627,12 @@ if HAS_FASTAPI:
         agent_id: str = "unknown"
         session_id: str = ""
         metadata: Dict[str, Any] = Field(default_factory=dict)
+        # Agent-Native mode: pre-extracted facts from the Agent's own LLM
+        extracted_facts: Optional[List[Dict[str, Any]]] = Field(
+            default=None,
+            description="Pre-extracted facts (Agent-Native mode). "
+                        "If provided, daemon skips LLM call and uses these directly.",
+        )
 
     class IngestRequestModel(BaseModel):
         content: str
@@ -590,7 +646,15 @@ if HAS_FASTAPI:
 
     @app.post("/hook")
     async def api_hook(req: HookRequestModel) -> JSONResponse:
-        """Main entry point: send conversation turn for auto-memory."""
+        """Main entry point: send conversation turn for auto-memory.
+
+        Agent-Native mode (zero cost):
+            Include extracted_facts in the request body.
+            The Agent uses its own LLM to extract facts, daemon only dedups + stores.
+
+        Fallback mode:
+            Omit extracted_facts. Daemon will call external LLM or use heuristics.
+        """
         engine = get_engine()
         hook_req = HookRequest(
             user_message=req.user_message,
@@ -598,6 +662,7 @@ if HAS_FASTAPI:
             agent_id=req.agent_id,
             session_id=req.session_id,
             metadata=req.metadata,
+            extracted_facts=req.extracted_facts,
         )
         result = await engine.on_conversation_turn(hook_req)
         return JSONResponse(result.to_dict(), status_code=200 if result.success else 500)
@@ -664,6 +729,7 @@ else:
                         agent_id=data.get("agent_id", "unknown"),
                         session_id=data.get("session_id", ""),
                         metadata=data.get("metadata", {}),
+                        extracted_facts=data.get("extracted_facts"),
                     )
                     result = asyncio.get_event_loop().run_until_complete(
                         self.engine.on_conversation_turn(req)
