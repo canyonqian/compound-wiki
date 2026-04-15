@@ -2,7 +2,7 @@
 MCP Server — Standard Protocol for AI Tool Integration
 =======================================================
 
-Implements the Model Context Protocol (MCP) so that Compound Wiki's
+Implements the Model Context Protocol (MCP) so that CAM's
 Memory Core can be used by ANY MCP-compatible AI tool:
 
   - Claude Desktop
@@ -52,7 +52,7 @@ logger = logging.getLogger("memory_core.mcp_server")
 
 class MemoryMCPHandler:
     """
-    MCP protocol handler for Compound Wiki Memory Core.
+    MCP protocol handler for CAM Memory Core.
     
     Translates between MCP JSON-RPC and MemoryCore API calls.
     """
@@ -296,7 +296,7 @@ async def run_mcp_server_stdio():
     
     handler = MemoryMCPHandler()
     
-    logger.info("Compound Wiki MCP Server starting (stdio mode)")
+    logger.info("CAM MCP Server starting (stdio mode)")
     logger.info(f"Wiki path: {handler.wiki_path}")
     
     # Process requests from stdin line by line

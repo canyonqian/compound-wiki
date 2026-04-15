@@ -1,5 +1,5 @@
 """
-Compound Wiki Memory Core v2.0
+CAM Memory Core v2.0
 ==============================
 
 AI-driven automatic memory system for Agent conversations.
@@ -34,7 +34,7 @@ License: MIT
 """
 
 __version__ = "2.0.0"
-__author__ = "Compound Wiki Contributors"
+__author__ = "CAM Contributors"
 
 from memory_core.hook_engine import HookEngine, HookEvent, HookResult
 from memory_core.extractor import FactExtractor, ExtractionResult, FactType

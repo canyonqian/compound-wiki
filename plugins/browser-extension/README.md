@@ -1,4 +1,4 @@
-# 🧠 Compound Wiki — Smart Browser Extension
+# 🧠 CAM — Smart Browser Extension
 
 > **智能浏览器扩展：自动识别有价值的内容，自动保存到你的 Wiki，全程无感。**
 
@@ -31,7 +31,7 @@
 
 ### 方式一：开发者模式加载（推荐）
 
-1. **确保 Compound Wiki 后端正在运行**
+1. **确保 CAM 后端正在运行**
    ```bash
    python auto/agent.py start
    ```
@@ -49,7 +49,7 @@
 
 ### 方式二：作为 Bookmarklet 使用（无需安装）
 
-1. 启动 Compound Wiki 后端
+1. 启动 CAM 后端
 2. 浏览器打开 `http://localhost:9877/bookmarklet.js`
 3. 把页面上的 **📎 Save to Wiki** 按钮**拖到书签栏**
 4. 在任意网页点击该书签即可保存
@@ -108,15 +108,15 @@
 两种方式：
 
 1. **点击扩展图标** → 弹出面板 → 点击 **💾 Force Save Now**
-2. **右键菜单** → "🧠 Save to Compound Wiki"
+2. **右键菜单** → "🧠 Save to CAM"
 
 ### 查看 Popup 面板
 
-点击浏览器工具栏的 Compound Wiki 图标：
+点击浏览器工具栏的 CAM 图标：
 
 ```
 ┌──────────────────────────────┐
-│  🧠 Compound Wiki    [SMART] │
+│  🧠 CAM    [SMART] │
 │                              │
 │  ● Connected          5 today│
 │                              │
@@ -171,7 +171,7 @@ Browser (Content Script)
   └─ POST /auto-clip
        │
        ▼
-  Compound Wiki Backend (:9877)
+  CAM Backend (:9877)
   │
   ├─ 接收并验证数据
   ├─ 存入 raw/ 目录（带完整 frontmatter）
@@ -218,7 +218,7 @@ browser-extension/
 
 ## 与其他工具对比
 
-| 功能 | Pocket | Notion Web Clipper | **Compound Wiki Extension** |
+| 功能 | Pocket | Notion Web Clipper | **CAM Extension** |
 |------|--------|-------------------|----------------------------|
 | 手动保存 | ✅ | ✅ | ✅ |
 | **自动识别** | ❌ | ❌ | **✅ 核心功能** |
@@ -249,4 +249,4 @@ browser-extension/
 
 ## License
 
-MIT © Compound Wiki Contributors
+MIT © CAM Contributors

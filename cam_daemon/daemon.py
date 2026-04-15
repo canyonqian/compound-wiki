@@ -1,6 +1,6 @@
 """
-CwDaemon Lifecycle Manager
-==========================
+CAM Daemon Lifecycle Manager
+============================
 
 Handles daemon start/stop/restart/status operations.
 Manages PID file, graceful shutdown, signal handling.
@@ -14,12 +14,12 @@ import sys
 import time
 from pathlib import Path
 
-logger = logging.getLogger("cw_daemon.daemon")
+logger = logging.getLogger("cam_daemon.daemon")
 
 
 class DaemonManager:
     """
-    Manages the lifecycle of cw-daemon as a background process.
+    Manages the lifecycle of cam-daemon as a background process.
 
     Responsibilities:
     - PID file management (prevent multiple instances)
@@ -104,10 +104,10 @@ class DaemonManager:
             existing_pid = int(self.pid_path.read_text().strip())
             raise RuntimeError(
                 f"Daemon already running (PID {existing_pid}). "
-                f"Use 'cw daemon stop' first or 'cw daemon restart'."
+                f"Use 'cam daemon stop' first or 'cam daemon restart'."
             )
 
-        logger.info(f"Starting Compound Wiki Daemon v2.0.0")
+        logger.info(f"Starting CAM Daemon v2.0.0")
         logger.info(f"  Wiki: {self.config.wiki_path}")
         logger.info(f"  API : http://{self.config.host}:{self.config.port}")
         logger.info(f"  LLM : {self.config.llm.provider}/{self.config.llm.model}")
@@ -116,8 +116,8 @@ class DaemonManager:
         self.pid_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Initialize engine
-        from .server import CwEngine
-        self._engine = CwEngine(self.config)
+        from .server import CamEngine
+        self._engine = CamEngine(self.config)
 
         # Write PID
         pid = os.getpid()
@@ -251,8 +251,8 @@ class DaemonManager:
 
     async def _start_scheduler(self) -> None:
         """Start background scheduled tasks."""
-        from .scheduler import CwScheduler
-        self._scheduler = CwScheduler(engine=self._engine, config=self.config)
+        from .scheduler import CamScheduler
+        self._scheduler = CamScheduler(engine=self._engine, config=self.config)
         await self._scheduler.start()
 
 

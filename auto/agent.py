@@ -1,6 +1,6 @@
 """
-Compound Wiki - Main Agent Entry Point
-=======================================
+CAM — Main Agent Entry Point
+================================
 Unified entry point that orchestrates all modules:
   - File Watcher (auto-detects new files in raw/)
   - Ingestion Pipeline (processes raw → wiki via LLM)
@@ -31,7 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # Import all modules
-from auto.config import load_config, generate_default_config, CompoundWikiConfig
+from auto.config import load_config, generate_default_config, CamConfig
 from auto.state import StateManager, WikiState
 from auto.watcher import FileWatcher
 from auto.pipeline import IngestionPipeline, LLMClient
@@ -64,7 +64,7 @@ def setup_logging(level: str = "INFO", log_file: str | None = None):
 BANNER = r"""
 ╔═══════════════════════════════════════════════════╗
 ║                                                   ║
-║   🧠 Compound Wiki — AI-Driven Memory System      ║
+║   🧠 CAM — Compound Agent Memory System          ║
 ║   Make knowledge compound over time               ║
 ║                                                   ║
 ║   Auto Mode: ON                                   ║
@@ -74,9 +74,9 @@ BANNER = r"""
 """
 
 
-class CompoundWikiAgent:
+class CamAgent:
     """
-    The main agent that orchestrates all Compound Wiki modules.
+    The main agent that orchestrates all CAM modules.
     
     Lifecycle:
       1. Load config & state
@@ -115,12 +115,12 @@ class CompoundWikiAgent:
 
     def __init__(self, config_path: str | Path | None = None):
         # Load configuration
-        self.cfg: CompoundWikiConfig = load_config(config_path)
+        self.cfg: CamConfig = load_config(config_path)
 
         # Setup logging
         setup_logging(self.cfg.log_level, self.cfg.log_file)
         
-        self.logger = logging.getLogger("compound_wiki")
+        self.logger = logging.getLogger("cam")
 
         # Initialize state manager
         self.state = StateManager(str(self.cfg.root_dir / getattr(self.cfg, 'state_file', 'auto/state/state.json')))
@@ -223,7 +223,7 @@ class CompoundWikiAgent:
 
     def cmd_init(self) -> None:
         """First-time setup: generate default config and directory structure."""
-        print("\n🔧 Initializing Compound Wiki...")
+        print("\n🔧 Initializing CAM...")
 
         # Create directories
         for d in ["raw", "wiki/concept", "wiki/entity", "wiki/synthesis", 
@@ -291,7 +291,7 @@ class CompoundWikiAgent:
         stats = self.state.get_stats()
 
         print("\n" + "=" * 50)
-        print("  🧠 Compound Wiki — Status Report")
+        print("  🧠 CAM — Status Report")
         print("=" * 50)
         print(f"\n  📂 Files:")
         print(f"     Tracked:    {stats['tracked_files']}")
@@ -319,8 +319,8 @@ class CompoundWikiAgent:
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="compound-wiki",
-        description="🧠 Compound Wiki — AI-driven compound memory system",
+        prog="cam",
+        description="🧠 CAM — Compound Agent Memory system",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

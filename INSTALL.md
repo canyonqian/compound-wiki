@@ -1,4 +1,4 @@
-# Compound Wiki — Installation Guide
+# CAM — Installation Guide
 
 Zero-config. Uses Host Agent's LLM. No separate API key needed.
 
@@ -15,7 +15,7 @@ pip install -r requirements.txt
 Or install as a package (once published):
 
 ```bash
-pip install compound-wiki
+pip install cam
 ```
 
 ---
@@ -36,7 +36,7 @@ Add to your MCP config:
     "compound-wiki": {
       "command": "python",
       "args": ["-m", "plugins.mcp_server"],
-      "env": { "CW_PROJECT_DIR": "/path/to/your/wiki" }
+      "env": { "CAM_PROJECT_DIR": "/path/to/your/wiki" }
     }
   }
 }
@@ -52,7 +52,7 @@ Add to `.cursor/mcp.json` in your project root:
     "compound-wiki": {
       "command": "python",
       "args": ["-m", "plugins.mcp_server"],
-      "env": { "CW_PROJECT_DIR": "${workspaceFolder}" }
+      "env": { "CAM_PROJECT_DIR": "${workspaceFolder}" }
     }
   }
 }
@@ -68,7 +68,7 @@ Add to `.vscode/mcp.json` or VS Code settings:
     "compound-wiki": {
       "command": "python",
       "args": ["-m", "plugins.mcp_server"],
-      "env": { "CW_PROJECT_DIR": "${workspaceFolder}" }
+      "env": { "CAM_PROJECT_DIR": "${workspaceFolder}" }
     }
   }
 }
@@ -84,7 +84,7 @@ Add to `.windsurf/mcp.json`:
     "compound-wiki": {
       "command": "python",
       "args": ["-m", "plugins.mcp_server"],
-      "env": { "CW_PROJECT_DIR": "${workspaceFolder}" }
+      "env": { "CAM_PROJECT_DIR": "${workspaceFolder}" }
     }
   }
 }
@@ -98,8 +98,8 @@ OpenClaw uses a **native plugin system** (not MCP). Installation is a two-step p
 
 ```bash
 # Clone to a permanent location
-git clone https://github.com/canyonqian/compound-wiki.git ~/compound-wiki
-cd ~/compound-wiki
+git clone https://github.com/canyonqian/cam.git ~/cam
+cd ~/cam
 pip install mcp[cli] -r requirements.txt
 ```
 
@@ -107,7 +107,7 @@ pip install mcp[cli] -r requirements.txt
 
 ```bash
 # Enable the plugin (OpenClaw CLI handles config registration)
-openclaw plugins enable compound-wiki --source path --source-path ~/compound-wiki/plugins/openclaw
+openclaw plugins enable compound-wiki --source path --source-path ~/cam/plugins/openclaw
 
 # Restart the gateway to apply
 openclaw gateway restart
@@ -117,7 +117,7 @@ openclaw gateway restart
 
 ```bash
 openclaw plugins list | grep compound
-# Should show: │ Compound Wiki │ compound-wiki │ loaded │ ... │ 2.0.0 │
+# Should show: │ CAM │ cam │ loaded │ ... │ 2.0.0 │
 ```
 
 #### Plugin Configuration (optional)
@@ -143,7 +143,7 @@ The plugin works out of the box with defaults. To customize, edit `~/.openclaw/o
 
 | Config Key | Default | Description |
 |------------|---------|-------------|
-| `wikiPath` | `~/compound-wiki` | Path to Compound Wiki project root |
+| `wikiPath` | `~/cam` | Path to CAM project root |
 | `injectOnPrompt` | `true` | Auto-inject wiki context into system prompt |
 | `extractOnOutput` | `true` | Auto-extract knowledge from AI responses |
 
@@ -157,7 +157,7 @@ Add to `.cody/mcp.json` or JetBrains MCP settings:
     "compound-wiki": {
       "command": "python",
       "args": ["-m", "plugins.mcp_server"],
-      "env": { "CW_PROJECT_DIR": "${projectRoot}" }
+      "env": { "CAM_PROJECT_DIR": "${projectRoot}" }
     }
   }
 }
@@ -188,7 +188,7 @@ python -m plugins.mcp_server sse
 │  Agent calls: cw_ingest(content="...")              │
 │       ↓                                             │
 │  ┌─────────────────────────────────┐               │
-│  │   Compound Wiki MCP Server v2   │               │
+│  │   CAM MCP Server v2   │               │
 │  │                                 │               │
 │  │  1. Saves content → raw/        │               │
 │  │  2. Returns EXTRACTION PROMPT   │ ← No API call! │
@@ -225,12 +225,12 @@ python -m plugins.mcp_server sse
 | Problem | Solution |
 |---------|----------|
 | `ModuleNotFoundError: mcp` | Run `pip install mcp[cli]` |
-| `CW_PROJECT_DIR` not set | Set env var or use default (plugin parent dir) |
-| Wiki directory empty after ingest | The Agent needs to follow the extraction prompt and call `cw_write_pages` |
+| `CAM_PROJECT_DIR` not set | Set env var or use default (plugin parent dir) |
+| Wiki directory empty after ingest | The Agent needs to follow the extraction prompt and call `cam_write_pages` |
 | Pages not linking correctly | Make sure Agent uses `[[]]` format for internal links |
 | **OpenClaw:** `source: Invalid input` | Must use `openclaw plugins enable` CLI, not manual config edit. Allowed sources: `npm`, `archive`, `path`, `clawhub`, `marketplace` |
 | **OpenClaw:** `plugin disabled (not in allowlist)` | Run `openclaw plugins enable compound-wiki --source path --source-path <path>` to register |
 
 ---
 
-*Compound Wiki v2 — Universal AI Memory Plugin*
+*CAM v2 — Universal AI Memory Plugin*

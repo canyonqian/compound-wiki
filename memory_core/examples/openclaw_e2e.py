@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-OpenClaw + Compound Wiki — Real End-to-End Integration Test
+OpenClaw + CAM — Real End-to-End Integration Test
 ===========================================================
 
 Flow:
   1. User sends message → OpenClaw Agent (xiaomi model)
   2. Agent responds with meaningful content  
   3. Response captured → fed to MemoryCore.extractor()
-  4. Facts stored in SharedWiki (compound-wiki/wiki/)
+  4. Facts stored in SharedWiki (cam/wiki/)
   5. User queries wiki → gets back accumulated knowledge
 
-This proves: OpenClaw Agent drives Compound Wiki automatically.
+This proves: OpenClaw Agent drives CAM automatically.
 """
 
 import asyncio
@@ -64,8 +64,8 @@ async def main():
     print("=" * 70)
     
     # === Step 1: Init MemoryCore ===
-    print("\n[Step 1] Initialize Compound Wiki...")
-    wiki_dir = Path(os.path.expanduser("~/compound-wiki"))
+    print("\n[Step 1] Initialize CAM...")
+    wiki_dir = Path(os.path.expanduser("~/cam"))
     
     # Clean old test data
     index_file = wiki_dir / "wiki" / "index.md"
@@ -185,7 +185,7 @@ async def main():
     print("\n" + "=" * 70)
     if success:
         print(f"  RESULT: PASS  |  Facts: {all_stored_facts}  |  Pages: {len(generated_pages)}")
-        print(f"           Compound Wiki successfully integrated with OpenClaw!")
+        print(f"           CAM successfully integrated with OpenClaw!")
     else:
         print(f"  RESULT: PARTIAL  |  OpenClaw responded but no facts extracted")
         print(f"           Tip: Production uses LLM-based extraction (richer)")

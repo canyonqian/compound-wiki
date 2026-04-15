@@ -1,6 +1,6 @@
 """
-CwDaemon HTTP Server
-=====================
+CAM Daemon HTTP Server
+======================
 
 FastAPI-based HTTP server that provides the universal Agent memory API.
 This is THE single entry point for ALL Agents.
@@ -37,7 +37,7 @@ except ImportError:
     import urllib.parse
 
 
-logger = logging.getLogger("cw_daemon.server")
+logger = logging.getLogger("cam_daemon.server")
 
 # ── Request/Response Models (used by both FastAPI and fallback) ───
 
@@ -152,7 +152,7 @@ class ThrottleController:
 
 # ── Core Daemon Engine ────────────────────────────────────────
 
-class CwEngine:
+class CamEngine:
     """
     The brain of the daemon. Handles extraction → dedup → write pipeline.
 
@@ -442,7 +442,7 @@ class CwEngine:
         total = sum(type_counts.values())
 
         index_lines = [
-            "# Compound Wiki - 全局索引\n",
+            "# CAM - 全局索引\n",
             f"> **最后更新**: {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}\n",
             f"> **页面总数**: {total}\n",
             "> **状态**: 活跃\n",
@@ -557,14 +557,14 @@ class CwEngine:
 
 if HAS_FASTAPI:
     app = FastAPI(
-        title="Compound Wiki Daemon",
+        title="CAM Daemon",
         description="Universal AI Memory Service — One endpoint, any Agent",
         version="2.0.0",
     )
 
-    _engine_instance: Optional[CwEngine] = None
+    _engine_instance: Optional[CamEngine] = None
 
-    def get_engine() -> CwEngine:
+    def get_engine() -> CamEngine:
         global _engine_instance
         assert _engine_instance, "Daemon engine not initialized!"
         return _engine_instance
@@ -640,7 +640,7 @@ else:
     class _FallbackHandler(BaseHTTPRequestHandler):
         """Lightweight HTTP handler when FastAPI isn't available."""
 
-        engine: CwEngine = None
+        engine: CamEngine = None
 
         def do_POST(self):
             import asyncio
@@ -732,7 +732,7 @@ else:
             logger.debug(f"[HTTP] {args}")
 
 
-def create_server(engine: CwEngine, host: str = "127.0.0.1",
+def create_server(engine: CamEngine, host: str = "127.0.0.1",
                   port: int = 9877):
     """
     Create the HTTP server instance (with engine attached).

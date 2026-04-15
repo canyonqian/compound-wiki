@@ -21,8 +21,8 @@ Usage:
     adapter = ObsidianAdapter({"vault_path": "/path/to/compound-wiki"})
     await adapter.sync_all(Path("wiki"))
     
-    # Or simply: Open compound-wiki/ in Obsidian!
-    # File → Open Folder As Vault → select compound-wiki/
+    # Or simply: Open cam/ in Obsidian!
+    # File → Open Folder As Vault → select cam/
 """
 
 import json

@@ -1,5 +1,5 @@
 """
-Compound Wiki Plugin System
+CAM Plugin System
 ============================
 
 Plugin-based architecture for data ingestion and integration.
@@ -26,10 +26,10 @@ Architecture:
         └── web_ui.py        # Web dashboard (optional)
 
 Usage:
-    from plugins import CompoundWikiMCP, SourceRegistry
+    from plugins import CamMCP, SourceRegistry
     
     # Start MCP server for AI tools
-    server = CompoundWikiMCP()
+    server = CamMCP()
     server.run()
     
     # Register custom source
@@ -47,8 +47,8 @@ from .base import (
 from .mcp_server import server as _mcp_server, run_mcp_server
 from .sources import SourceRegistry, get_all_sources
 
-# Backward-compatible alias: CompoundWikiMCP wraps the server
-class CompoundWikiMCP:
+# Backward-compatible alias: CamMCP wraps the server
+class CamMCP:
     """Wrapper around the MCP server instance."""
     def __init__(self):
         self._server = _mcp_server
@@ -62,7 +62,7 @@ __all__ = [
     "IngestItem",
     "IngestResult",
     "SourceConfig",
-    "CompoundWikiMCP",
+    "CamMCP",
     "SourceRegistry",
     "get_all_sources",
     "run_mcp_server",

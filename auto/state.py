@@ -1,5 +1,5 @@
 """
-Compound Wiki - State Manager
+CAM - State Manager
 ==============================
 Tracks ingestion history, processed files, and operational state.
 Enables incremental updates and prevents duplicate processing.

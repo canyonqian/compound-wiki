@@ -1,5 +1,5 @@
 """
-CLI Daemon Commands — cw daemon [start|stop|restart|status|ping]
+CLI Daemon Commands — cam daemon [start|stop|restart|status|ping]
 ===============================================================
 
 Implements the actual daemon lifecycle commands called from cli.py.
@@ -43,7 +43,7 @@ def cmd_daemon_start(rest_args=None):
     """Start the daemon in the foreground or background."""
     args = _parse_daemon_args(rest_args or [])
 
-    print(f"{C.BOLD}{C.BLUE}🔧 Compound Wiki Daemon v2{C.END}")
+    print(f"{C.BOLD}{C.BLUE}🔧 CAM Daemon v2{C.END}")
     print(f"{C.BOLD}   Universal AI Memory Service{C.END}\n")
 
     # Check if already running
@@ -56,13 +56,13 @@ def cmd_daemon_start(rest_args=None):
         with urllib.request.urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read().decode())
             if data.get("status") == "healthy":
-                pid_path = str(Path(args.wiki).parent / ".daemon" / "cw-daemon.pid")
+                pid_path = str(Path(args.wiki).parent / ".daemon" / "cam-daemon.pid")
                 existing_pid = "?"
                 if os.path.exists(pid_path):
                     existing_pid = open(pid_path).read().strip()
                 print(f"{C.YELLOW}⚠️  Daemon is already running (PID {existing_pid}){C.END}")
                 print(f"  API: http://{args.host}:{args.port}")
-                print(f"\n  Use 'cw daemon stop' to stop it first.")
+                print(f"\n  Use 'cam daemon stop' to stop it first.")
                 return
     except Exception:
         pass  # Not running, good
@@ -70,8 +70,8 @@ def cmd_daemon_start(rest_args=None):
     print(f"  Wiki:   {os.path.abspath(args.wiki)}")
     print(f"  API:    http://{args.host}:{args.port}")
 
-    llm_provider = args.llm_provider or os.environ.get("CW_LLM_PROVIDER", "openai")
-    llm_model = args.llm_model or os.environ.get("CW_LLM_MODEL", "gpt-4o-mini")
+    llm_provider = args.llm_provider or os.environ.get("CAM_LLM_PROVIDER", "openai")
+    llm_model = args.llm_model or os.environ.get("CAM_LLM_MODEL", "gpt-4o-mini")
     print(f"  LLM:    {llm_provider}/{llm_model}\n")
 
     # Build config
@@ -84,12 +84,12 @@ def cmd_daemon_start(rest_args=None):
             "provider": llm_provider,
             "model": llm_model,
             "api_key": os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY", ""),
-            "base_url": os.environ.get("CW_LLM_BASE_URL", ""),
+            "base_url": os.environ.get("CAM_LLM_BASE_URL", ""),
         },
     }
 
     # Save config
-    config_path = Path(args.wiki).parent / "cw-daemon.json"
+    config_path = Path(args.wiki).parent / "cam-daemon.json"
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config_data, f, indent=2, default=str)
     print(f"  Config: {config_path}\n")
@@ -98,11 +98,11 @@ def cmd_daemon_start(rest_args=None):
     # We use subprocess so it runs independently of this shell session
     import subprocess
 
-    daemon_script = os.path.join(os.path.dirname(__file__), "..", "cw_daemon", "_run.py")
+    daemon_script = os.path.join(os.path.dirname(__file__), "..", "cam_daemon", "_run.py")
     if not os.path.exists(daemon_script):
         # Fallback: try as a module
         daemon_cmd = [
-            sys.executable, "-m", "cw_daemon._run",
+            sys.executable, "-m", "cam_daemon._run",
             "--config", str(config_path),
         ]
     else:
@@ -153,12 +153,12 @@ def cmd_daemon_start(rest_args=None):
                 print(f"    GET  http://{args.host}:{args.port}/query?q=...")
                 print()
                 print(f"  管理命令:")
-                print(f"    cw daemon status")
-                print(f"    cw daemon stop")
-                print(f"    cw daemon ping\n")
+                print(f"    cam daemon status")
+                print(f"    cam daemon stop")
+                print(f"    cam daemon ping\n")
             else:
                 print(f"{C.YELLOW}⚠️  Daemon started but not yet online.{C.END}")
-                print(f"  Check: cw daemon status")
+                print(f"  Check: cam daemon status")
                 print(f"  Logs:  .daemon/daemon.log\n")
             return
         else:
@@ -169,13 +169,13 @@ def cmd_daemon_start(rest_args=None):
     # Windows path (no fork)
     time.sleep(1.5)
     print(f"{C.GREEN}✅ Daemon starting (PID {proc.pid}){C.END}\n")
-    print(f"  检查状态: cw daemon status")
-    print(f"  停止运行: cw daemon stop\n")
+    print(f"  检查状态: cam daemon status")
+    print(f"  停止运行: cam daemon stop\n")
 
 
 def cmd_daemon_stop():
     """Stop the running daemon."""
-    print(f"{C.BOLD}🛑 Stopping Compound Wiki Daemon{C.END}\n")
+    print(f"{C.BOLD}🛑 Stopping CAM Daemon{C.END}\n")
 
     # Find PID file locations to check
     possible_pids = []
@@ -185,13 +185,13 @@ def cmd_daemon_stop():
         wiki_dirs.insert(0, os.path.join(root, "wiki"))
 
     for wdir in wiki_dirs:
-        ppath = Path(wdir).parent / ".daemon" / "cw-daemon.pid"
+        ppath = Path(wdir).parent / ".daemon" / "cam-daemon.pid"
         if ppath.exists():
             possible_pids.append(ppath)
 
     if not possible_pids:
         # Try current directory
-        cwd_pid = Path(".daemon/cw-daemon.pid")
+        cwd_pid = Path(".daemon/cam-daemon.pid")
         if cwd_pid.exists():
             possible_pids.append(cwd_pid)
 
@@ -253,7 +253,7 @@ def cmd_daemon_restart(rest_args=None):
 
 def cmd_daemon_status():
     """Show daemon status."""
-    print(f"{C.BOLD}⚡ Compound Wiki Daemon Status{C.END}\n")
+    print(f"{C.BOLD}⚡ CAM Daemon Status{C.END}\n")
 
     # Check multiple PID locations
     found = False
@@ -305,7 +305,7 @@ def cmd_daemon_status():
 
     if not found:
         print(f"  状态:  {C.RED}未启动{C.END}")
-        print(f"\n  启动: {C.CYAN}cw daemon start{C.END}")
+        print(f"\n  启动: {C.CYAN}cam daemon start{C.END}")
 
     print()
 

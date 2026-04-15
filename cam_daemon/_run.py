@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-CwDaemon Run Entry Point
-=========================
+CamDaemon Run Entry Point
+==========================
 
-This is the actual script that runs when `cw daemon start` is called.
+This is the actual script that runs when `cam daemon start` is called.
 It starts the HTTP server and blocks until shutdown.
 
 Usage (internal):
-    python cw_daemon/_run.py --config path/to/cw-daemon.json
+    python cam_daemon/_run.py --config path/to/cam-daemon.json
     OR
-    python -m cw_daemon._run --config path/to/cw-daemon.json
+    python -m cam_daemon._run --config path/to/cam-daemon.json
 """
 
 import asyncio
@@ -46,8 +46,8 @@ def setup_logging(log_path: str = ""):
 
 async def main(config_path: str):
     """Main entry point — load config, start engine, serve."""
-    from cw_daemon.config import DaemonConfig
-    from cw_daemon.daemon import DaemonManager
+    from cam_daemon.config import DaemonConfig
+    from cam_daemon.daemon import DaemonManager
     
     # Load config
     if not os.path.exists(config_path):
@@ -68,8 +68,8 @@ async def main(config_path: str):
     
     # Setup logging
     setup_logging(config.log_file)
-    logger = logging.getLogger("cw_daemon")
-    logger.info("=== Compound Wiki Daemon v2 Starting ===")
+    logger = logging.getLogger("cam_daemon")
+    logger.info("=== CAM Daemon v3 Starting ===")
     logger.info(f"Config: {config_path}")
     
     # Create manager & start
@@ -82,7 +82,7 @@ async def main(config_path: str):
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="Compound Wiki Daemon")
+    parser = argparse.ArgumentParser(description="CAM Daemon")
     parser.add_argument("--config", required=True, help="Path to config JSON")
     args = parser.parse_args()
     

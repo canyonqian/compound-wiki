@@ -1,5 +1,5 @@
 """
-Compound Wiki - File Watcher
+CAM - File Watcher
 ==============================
 Monitors raw/ directory for new/changed files and auto-triggers ingestion.
 Uses watchdog library with debouncing and batch processing.
@@ -23,7 +23,7 @@ except ImportError:
     print("[WARN] watchdog not installed. Run: pip install watchdog")
     print("[INFO] Falling back to polling mode.")
 
-logger = logging.getLogger("compound_wiki.watcher")
+logger = logging.getLogger("cam.watcher")
 
 
 class RawFileHandler(FileSystemEventHandler):

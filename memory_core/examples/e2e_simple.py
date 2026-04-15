@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""E2E: OpenClaw + Compound Wiki."""
+"""E2E: OpenClaw + CAM."""
 import asyncio, json, os, subprocess, re, sys
-sys.path.insert(0, "/root/compound-wiki")
+sys.path.insert(0, "/root/cam")
 
 def call_oc(msg, sid="cw-e2e"):
     r = subprocess.run(
@@ -14,14 +14,14 @@ def call_oc(msg, sid="cw-e2e"):
 
 async def main():
     print("=" * 60, flush=True)
-    print("  OpenClaw x Compound Wiki - E2E", flush=True)
+    print("  OpenClaw x CAM - E2E", flush=True)
     print("=" * 60, flush=True)
 
     from memory_core import MemoryCore
     from memory_core.extractor import FactType, ExtractedFact
 
     print("\n[1] Init Wiki...", flush=True)
-    mc = MemoryCore(wiki_path="/root/compound-wiki/wiki")
+    mc = MemoryCore(wiki_path="/root/cam/wiki")
     await mc.initialize()
     sw = mc.hook_engine.shared_wiki
     print(f"    path={sw.wiki_path}", flush=True)
@@ -55,7 +55,7 @@ async def main():
             total += len(facts)
 
     print("\n" + "=" * 60, flush=True)
-    idx = "/root/compound-wiki/wiki/index.md"
+    idx = "/root/cam/wiki/index.md"
     if os.path.exists(idx):
         c = open(idx).read()
         print(f"  RESULT: {total} facts stored | Index entries: {c.count('- [')}", flush=True)

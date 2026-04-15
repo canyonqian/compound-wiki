@@ -464,29 +464,29 @@ class BrowserClipperSource(BaseSource):
         headers:{{'Content-Type':'application/json'}},
         body:JSON.stringify({{title:t,url:u,content:c}})
     }}).then(function(r){{
-        if(r.ok) alert('\\u2705 Saved to Compound Wiki: '+t);
+        if(r.ok) alert('\\u2705 Saved to CAM: '+t);
         else alert('\\u274C Save failed');
     }}).catch(function(e){{
         alert('\\u274C Cannot reach Wiki server. Is it running?');
     }});
 }})();
-// Compound Wiki Clipper'''
+// CAM Clipper'''
 
         html = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Compound Wiki — Bookmarklet</title>
+<html><head><meta charset="utf-8"><title>CAM — Bookmarklet</title>
 <style>body{{font-family:-apple-system,sans-serif;max-width:600px;margin:50px auto;padding:20px}}
 a.clip{{display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;
 border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold}}
 a.clip:hover{{background:#1d4ed8}}code{{background:#f1f5f9;padding:2px 6px;border-radius:4px}}</style></head>
 <body>
-<h1>\\ud83e\\udde0 Compound Wiki \\u2014 Browser Clipper</h1>
+<h1>\\ud83e\\udde0 CAM \\u2014 Browser Clipper</h1>
 <p>Drag this button to your browser's bookmarks bar:</p>
 <a class="clip" href="javascript:{e(js_code)}">\\ud83d\\udcce Save to Wiki</a>
 <h2>How to use</h2><ol>
 <li>Drag the <b>\\ud83d\\udcce Save to Wiki</b> button above to your bookmarks bar</li>
 <li>Navigate to any article/webpage you want to save</li>
 <li>Click the <b>\\ud83d\\udcce Save to Wiki</b> bookmark</li>
-<li>The page is automatically sent to your Compound Wiki!</li>
+<li>The page is automatically sent to your CAM!</li>
 </ol>
 <p><b>TIP:</b> Select/highlight text first, and only the selection will be saved.</p>
 

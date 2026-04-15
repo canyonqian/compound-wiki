@@ -406,7 +406,7 @@ function showDesktopNotification(captureData, backendResult) {
         chrome.notifications.create(`cw-${Date.now()}`, {
             type: 'basic',
             iconUrl: 'icons/icon128.png',
-            title: '🧠 Saved to Compound Wiki',
+            title: '🧠 Saved to CAM',
             message: captureData.title || captureData.url,
             contextMessage: `Score: ${captureData.score} · Triggered by: ${captureData.trigger}`,
             priority: 1,

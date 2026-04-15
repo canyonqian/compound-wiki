@@ -117,7 +117,7 @@ class MemoryResult:
 
 class MemoryCore:
     """
-    The main entry point for using Compound Wiki's Memory Core.
+    The main entry point for using CAM's Memory Core.
     
     This is what most users interact with. It wires together:
     - HookEngine (conversation event detection)

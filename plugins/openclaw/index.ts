@@ -1,8 +1,8 @@
 /**
- * Compound Wiki — OpenClaw Plugin v3 (Daemon Mode)
+ * CAM — OpenClaw Plugin v3 (Daemon Mode)
  *
  * v3 改动：不再自己调用 Python 子进程做提取/写入，
- * 而是把对话数据发给 cw-daemon HTTP API，让 daemon 统一处理。
+ * 而是把对话数据发给 cam-daemon HTTP API，让 daemon 统一处理。
  *
  * Hook 点：
  *   before_prompt_build → 查询 daemon 的 /query → 注入上下文
@@ -22,7 +22,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 // 配置
 // ============================================================
 
-const DAEMON_URL = process.env.CW_DAEMON_URL || "http://127.0.0.1:9877";
+const DAEMON_URL = process.env.CAM_DAEMON_URL || "http://127.0.0.1:9877";
 const DAEMON_TIMEOUT_MS = 8000; // 8s timeout for daemon calls
 
 function resolveConfig(cfg: Record<string, unknown>): {
@@ -32,7 +32,7 @@ function resolveConfig(cfg: Record<string, unknown>): {
   daemonUrl: string;
 } {
   return {
-    wikiPath: ((cfg.wikiPath as string) || process.env.CW_PROJECT_DIR || process.cwd()).replace(/\/+$/, ""),
+    wikiPath: ((cfg.wikiPath as string) || process.env.CAM_PROJECT_DIR || process.cwd()).replace(/\/+$/, ""),
     injectOnPrompt: cfg.injectOnPrompt !== false,
     extractOnOutput: cfg.extractOnOutput !== false,
     daemonUrl: (cfg.daemonUrl as string) || DAEMON_URL,
@@ -100,14 +100,14 @@ async function daemonPost(path: string, body: Record<string, unknown>, url: stri
     });
     
     if (!resp.ok) {
-      console.warn(`[compound-wiki] daemon ${path} returned ${resp.status}`);
+      console.warn(`[cam] daemon ${path} returned ${resp.status}`);
       return null;
     }
     
     return await resp.json() as DaemonResponse;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[compound-wiki] daemon ${path} unreachable: ${msg}`);
+    console.warn(`[cam] daemon ${path} unreachable: ${msg}`);
     return null; // Graceful degradation — daemon offline is not an error
   }
 }
@@ -149,7 +149,7 @@ export async function before_prompt_build(
 
     // Build context block from matches
     const contextLines: string[] = [
-      `## 📚 Compound Wiki Memory`,
+      `## 📚 CAM Memory`,
       "",
       `_The following knowledge was retrieved from your persistent memory:_`,
       "",
@@ -171,7 +171,7 @@ export async function before_prompt_build(
     }
 
     console.log(
-      `[compound-wiki] Injected ${result.matches.length} pages from daemon`,
+      `[cam] Injected ${result.matches.length} pages from daemon`,
     );
   } catch (_) {}
 }
@@ -216,16 +216,16 @@ export async function llm_output(
     }
 
     if (result.throttled) {
-      console.log(`[compound-wiki] throttled by daemon: ${result.message}`);
+      console.log(`[cam] throttled by daemon: ${result.message}`);
       return;
     }
 
     if (result.facts_written && result.facts_written > 0) {
       console.log(
-        `[compound-wiki] 🧠 ${result.facts_written} new fact(s) stored via daemon (${result.processing_time_ms}ms)`,
+        `[cam] 🧠 ${result.facts_written} new fact(s) stored via daemon (${result.processing_time_ms}ms)`,
       );
     } else if (result.status === "ok") {
-      console.log(`[compound-wiki] processed: ${result.message}`);
+      console.log(`[cam] processed: ${result.message}`);
     }
   } catch (_) {}
 }
@@ -237,8 +237,8 @@ export async function llm_output(
 export async function register(api: OpenClawPluginApi): Promise<void> {
   const config = resolveConfig(api.config);
   
-  console.log(`[compound-wiki] Plugin v3 loaded (daemon mode)`);
-  console.log(`[compound-wiki] daemon=${config.daemonUrl}`);
+  console.log(`[cam] Plugin v3 loaded (daemon mode)`);
+  console.log(`[cam] daemon=${config.daemonUrl}`);
 
   api.registerHook("before_prompt_build", (ctx: unknown) =>
     before_prompt_build(ctx as Parameters<typeof before_prompt_build>[0]),

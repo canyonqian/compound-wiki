@@ -1,6 +1,6 @@
 #!/bin/bash
-# E2E Test Runner for OpenClaw + Compound Wiki
-cd ~/compound-wiki
+# E2E Test Runner for OpenClaw + CAM
+cd ~/cam
 
 echo "=== Step 1: Quick Python check ==="
 python3 -u -c "print('Python works', flush=True)"
@@ -23,7 +23,7 @@ echo "OpenClaw replied: $RESULT"
 
 echo ""
 echo "=== Step 4: Full E2E test ==="
-cd ~/compound-wiki
+cd ~/cam
 python3 -u memory_core/examples/e2e_simple.py 2>&1
 echo ""
 echo "=== DONE (exit code: $?) ==="

@@ -3,14 +3,14 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "compound-wiki"
-version = "2.0.0"
-description = "AI-driven compound interest memory system — let knowledge grow in value over time"
+name = "cam"
+version = "3.0.0"
+description = "CAM (Compound Agent Memory) — AI-driven memory system for agents — let knowledge compound"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"
 authors = [
-    {name = "Compound Wiki Contributors"},
+    {name = "CAM Contributors"},
 ]
 keywords = [
     "wiki", "knowledge-management", "ai-memory", "agent", 
@@ -60,24 +60,24 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/canyonqian/compound-wiki"
-Documentation = "https://github.com/canyonqian/compound-wiki#readme"
-Repository = "https://github.com/canyonqian/compound-wiki.git"
-Issues = "https://github.com/canyonqian/compound-wiki/issues"
+Homepage = "https://github.com/canyonqian/cam"
+Documentation = "https://github.com/canyonqian/cam#readme"
+Repository = "https://github.com/canyonqian/cam.git"
+Issues = "https://github.com/canyonqian/cam/issues"
 
 # ============================================================
 #  CLI 入口点 — 安装后直接用 `cw` 命令
 # ============================================================
 [project.scripts]
-cw = "compound_wiki.cli:main"
+cam = "cam.cli:main"
 
 [tool.setuptools.packages.find]
 include = [
     "memory_core*",
     "auto*",
     "plugins*",
-    "compound_wiki*",
-    "cw_daemon*",
+    "cam*",
+    "cam_daemon*",
 ]
 
 [tool.setuptools.package-data]

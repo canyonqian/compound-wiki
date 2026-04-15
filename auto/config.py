@@ -1,5 +1,5 @@
 """
-Compound Wiki - Configuration System
+CAM - Configuration System
 =====================================
 Manages all configuration: paths, API keys, model settings, automation rules.
 """
@@ -160,7 +160,7 @@ class PipelineConfig:
 
 
 @dataclass
-class CompoundWikiConfig:
+class CamConfig:
     """Top-level configuration."""
 
     # Paths
@@ -179,7 +179,7 @@ class CompoundWikiConfig:
 
     # Logging
     log_level: str = "INFO"
-    log_file: str = "auto/logs/compound-wiki.log"
+    log_file: str = "auto/logs/cam.log"
 
     # Schema rule file path (CLAUDE.md or AGENTS.md)
     rule_file: str = "schema/CLAUDE.md"
@@ -245,12 +245,12 @@ def load_config(config_path: Optional[Path | str] = None) -> CompoundWikiConfig:
             print("[INFO] Using default configuration.")
 
     # Override with environment variables
-    if os.environ.get("CW_LLM_API_KEY"):
-        cfg.llm.api_key = os.environ["CW_LLM_API_KEY"]
-    if os.environ.get("CW_LLM_PROVIDER"):
-        cfg.llm.provider = os.environ["CW_LLM_PROVIDER"]
-    if os.environ.get("CW_LLM_BASE_URL"):
-        cfg.llm.base_url = os.environ["CW_LLM_BASE_URL"]
+    if os.environ.get("CAM_LLM_API_KEY"):
+        cfg.llm.api_key = os.environ["CAM_LLM_API_KEY"]
+    if os.environ.get("CAM_LLM_PROVIDER"):
+        cfg.llm.provider = os.environ["CAM_LLM_PROVIDER"]
+    if os.environ.get("CAM_LLM_BASE_URL"):
+        cfg.llm.base_url = os.environ["CAM_LLM_BASE_URL"]
 
     # Resolve paths
     cfg.root_dir = Path(cfg.root_dir)

@@ -1,13 +1,13 @@
 """
-CwDaemon Client — Lightweight SDK for Agent Integration
-======================================================
+CAM Daemon Client — Lightweight SDK for Agent Integration
+=======================================================
 
-Any Agent (Python/TypeScript/Shell/curl) can use this to talk to cw-daemon.
+Any Agent (Python/TypeScript/Shell/curl) can use this to talk to cam-daemon.
 
 Usage (Python):
-    from cw_daemon.client import CwClient
+    from cam_daemon.client import CamClient
 
-    client = CwClient("http://localhost:9877")
+    client = CamClient("http://localhost:9877")
     result = await client.remember(user_msg, ai_response)
 
 Usage (any language — HTTP):
@@ -22,12 +22,12 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger("cw_daemon.client")
+logger = logging.getLogger("cam_daemon.client")
 
 
-class CwClient:
+class CamClient:
     """
-    Lightweight async/sync client for cw-daemon.
+    Lightweight async/sync client for cam-daemon.
 
     This is what Agents use to interact with the daemon.
     Only ~80 lines of code.
@@ -177,7 +177,7 @@ class AutoRemember:
     def __init__(self, agent_id: str = "default",
                  daemon_url: str = "http://127.0.0.1:9877",
                  quiet: bool = True):
-        self.client = CwClient(base_url=daemon_url)
+        self.client = CamClient(base_url=daemon_url)
         self.agent_id = agent_id
         self.quiet = quiet
 

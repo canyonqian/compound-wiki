@@ -1,6 +1,6 @@
 """
-CwScheduler — Background Task Scheduler
-=======================================
+CamScheduler — Background Task Scheduler
+========================================
 
 Runs periodic maintenance tasks:
   - Daily LINT health check
@@ -15,10 +15,10 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-logger = logging.getLogger("cw_daemon.scheduler")
+logger = logging.getLogger("cam_daemon.scheduler")
 
 
-class CwScheduler:
+class CamScheduler:
     """
     Lightweight scheduler for daemon background tasks.
 

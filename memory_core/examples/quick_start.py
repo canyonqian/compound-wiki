@@ -1,5 +1,5 @@
 """
-Compound Wiki Memory Core — 5 Minute Quick Start
+CAM Memory Core — 5 Minute Quick Start
 ================================================
 
 This example shows how to add AUTOMATIC memory to ANY AI Agent
@@ -398,7 +398,7 @@ async def example_agent_native():
 async def main():
     print("""
 ============================================================
-     Compound Wiki Memory Core -- Quick Start Demo
+     CAM Memory Core -- Quick Start Demo
      
      Ex 1-4: LLM Fallback Mode (needs API key / Ollama)
      Ex 5:   Agent-Native Mode   (ZERO cost, recommended!)

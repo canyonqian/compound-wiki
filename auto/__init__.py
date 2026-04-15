@@ -1,7 +1,7 @@
 """
-Compound Wiki — Auto Engine
+CAM — Auto Engine
 ============================
-Intelligent automation layer for Compound Wiki.
+Intelligent automation layer for CAM.
 
 Modules:
   - config.py    : Configuration management (paths, API keys, model settings)

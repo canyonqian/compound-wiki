@@ -1,4 +1,4 @@
-# 🧠 Compound Wiki
+# 🧠 CAM
 
 <p align="center">
   <strong>Universal AI-Driven Compound Memory System — Make Knowledge Grow in Value Over Time</strong>
@@ -10,14 +10,14 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/version-2.0.0-blue" alt="Version">
   <a href="#quick-start"><img src="https://img.shields.io/badge/Status-Ready-green" alt="Status"></a>
-  <a href="https://github.com/canyonqian/compound-wiki/issues"><img src="https://img.shields.io/badge/PRs-Welcome-blue" alt="PRs Welcome"></a>
+  <a href="https://github.com/canyonqian/cam/issues"><img src="https://img.shields.io/badge/PRs-Welcome-blue" alt="PRs Welcome"></a>
 </p>
 
 ---
 
 ## ✨ What is This?
 
-**Compound Wiki** is an **open-source, universal AI Agent memory and knowledge management solution**. Inspired by Andrej Karpathy's [LLM-Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) concept, refined with best practices from the OpenClaw three-layer memory system.
+**CAM** is an **open-source, universal AI Agent memory and knowledge management solution**. Inspired by Andrej Karpathy's [LLM-Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) concept, refined with best practices from the OpenClaw three-layer memory system.
 
 > **In a nutshell**: You just feed materials into it, AI handles organizing everything into a structured Wiki. Knowledge auto-connects and continuously evolves — **it gets smarter the more you use it**.
 
@@ -32,7 +32,7 @@
 | 🔍 **LINT Auditing** | Built-in health checks to prevent error amplification in loops |
 | 🚀 **Daemon Process** | **NEW in v2.0!** One HTTP service handles memory for ALL Agents — integrate in 1 line |
 | 🔌 **Agent-Agnostic** | OpenClaw / Hermes / Claude Code / Cursor / Copilot / Any HTTP-capable Agent |
-| 📦 **pip Install** | `pip install compound-wiki` — one command, globally available |
+| 📦 **pip Install** | `pip install cam` — one command, globally available |
 | 🛡️ **Smart Dedup** | Similarity-based dedup engine — auto-merges duplicate facts, prevents knowledge bloat |
 
 ---
@@ -40,9 +40,9 @@
 ## 📐 Architecture (v2.0)
 
 ```
-compound-wiki/
+cam/
 │
-├── cw_daemon/               🚀 v2.0 Core — Daemon Process (NEW!)
+├── cam_daemon/               🚀 v2.0 Core — Daemon Process (NEW!)
 │   ├── server.py            ⭐ FastAPI HTTP server + extract/dedup/write pipeline
 │   ├── config.py            Config system (LLM / port / throttle params)
 │   ├── client.py            Lightweight SDK (3-line integration for any Agent)
@@ -57,7 +57,7 @@ compound-wiki/
 │   ├── mcp_server.py        MCP protocol server
 │   └── examples/
 │
-├── compound_wiki/           ⭐ CLI entry point
+├── cam/           ⭐ CLI entry point
 │   ├── cli.py               Unified CLI interface
 │   └── cli_daemon.py        🆕 Daemon management subcommands
 │
@@ -71,7 +71,7 @@ compound-wiki/
 ├── raw/                     📥 Raw material drop zone
 ├── wiki/                    📝 Knowledge base (AI-maintained, double-linked)
 ├── outputs/                 📤 Output layer
-├── scripts/cw_tool.py       🔧 Utility tools
+├── scripts/cam_tool.py       🔧 Utility tools
 ├── examples/                📚 Examples
 ├── README.md / README.en.md
 └── LICENSE                  MIT
@@ -89,12 +89,12 @@ compound-wiki/
        └──────────────────┼──────────────────┼─────────────────┘
                           ▼
               ┌───────────────────────┐
-              │    cw_daemon (v2.0)    │  ← One process, unified memory for ALL Agents
+              │    cam_daemon (v2.0)    │  ← One process, unified memory for ALL Agents
               │                       │
               │  ┌─────────────────┐  │
               │  │ ThrottleController│  │  ← 10s debounce + content hash dedup
               │  ├─────────────────┤  │
-              │  │ CwEngine        │  │  ← LLM extract → dedup → write → update index
+              │  │ CamEngine        │  │  ← LLM extract → dedup → write → update index
               │  ├─────────────────┤  │
               │  │ Deduplicator    │  │  ← Similarity >85% auto-merge
               │  └─────────────────┘  │
@@ -161,10 +161,10 @@ The most powerful approach. Start one daemon, all Agents connect via HTTP:
 
 ```bash
 # 1. Install
-pip install compound-wiki
+pip install cam
 
 # 2. Start the daemon
-cw daemon start --wiki ./wiki --port 9877
+cam daemon start --wiki ./wiki --port 9877
 
 # 3. Any Agent just sends conversations (1 line!)
 curl -X POST http://localhost:9877/hook \
@@ -172,9 +172,9 @@ curl -X POST http://localhost:9877/hook \
   -d '{"user_message": "We use PostgreSQL", "ai_response": "Noted", "agent_id": "openclaw"}'
 
 # Python Agent (3-line integration)
-from cw_daemon.client import CwClient, AutoRemember
+from cam_daemon.client import CamClient, AutoRemember
 
-client = CwClient()                              # Default: localhost:9877
+client = CamClient()                              # Default: localhost:9877
 auto = AutoRemember(agent_id="my-bot")           # Or use decorator pattern
 
 reply = await my_llm.chat(user_msg)
@@ -184,69 +184,69 @@ await auto(user_msg, reply)                      # ← That's it! Auto-extract +
 result = await client.query("database selection") # Returns relevant Wiki pages
 
 # Management
-cw daemon status    # Check daemon status
-cw daemon stop      # Stop gracefully
-cw daemon ping      # Quick health check
+cam daemon status    # Check daemon status
+cam daemon stop      # Stop gracefully
+cam daemon ping      # Quick health check
 ```
 
 **Full Daemon CLI:**
 
 ```bash
-cw daemon start [--wiki PATH] [--port PORT] [--host HOST]  # Start daemon
-cw daemon stop                                            # Graceful stop
-cw daemon restart                                         # Restart
-cw daemon status                                          # View status
-cw daemon ping                                            # Quick health check
+cam daemon start [--wiki PATH] [--port PORT] [--host HOST]  # Start daemon
+cam daemon stop                                            # Graceful stop
+cam daemon restart                                         # Restart
+cam daemon status                                          # View status
+cam daemon ping                                            # Quick health check
 ```
 
 ### Method B: MCP Plugin (For MCP-compatible Agents)
 
 ```bash
-pip install 'compound-wiki[mcp]'
+pip install 'cam[mcp]'
 # Add MCP Server config in your AI tool (see INSTALL.md)
 # Supports: Claude Desktop · Claude Code · Cursor · Copilot · Windsurf
 ```
 
-**Why no API key?** Compound Wiki uses **Agent-Native mode**: the Daemon handles orchestration and storage; calling AI Agents use their own LLM for knowledge extraction. Zero extra cost.
+**Why no API key?** CAM uses **Agent-Native mode**: the Daemon handles orchestration and storage; calling AI Agents use their own LLM for knowledge extraction. Zero extra cost.
 
 ### Method C: CLI (Standalone)
 
 ```bash
-pip install compound-wiki
-cw init my-knowledge-base
+pip install cam
+cam init my-knowledge-base
 cd my-knowledge-base
 # Drop files into raw/
-cw ingest          # Process materials → AI compiles Wiki
-cw stats           # View statistics
-cw lint            # Health check
-cw query "What is X?" # Query knowledge base
+cam ingest          # Process materials → AI compiles Wiki
+cam stats           # View statistics
+cam lint            # Health check
+cam query "What is X?" # Query knowledge base
 ```
 
 ### Method D: From Source (Developers)
 
 ```bash
-git clone https://github.com/canyonqian/compound-wiki.git
-cd compound-wiki
+git clone https://github.com/canyonqian/cam.git
+cd cam
 pip install -e .          # Editable mode for development
-cw init .
+cam init .
 ```
 
 **Prerequisites**: Python 3.8+
 
 **Optional dependencies:**
 ```bash
-pip install 'compound-wiki[auto]'      # Auto engine (file watcher + scheduler)
-pip install 'compound-wiki[anthropic]' # Anthropic Claude support
-pip install 'compound-wiki[openai]'    # OpenAI GPT support
-pip install 'compound-wiki[mcp]'       # MCP protocol support
-pip install 'compound-wiki[all]'       # Everything
+pip install 'cam[auto]'      # Auto engine (file watcher + scheduler)
+pip install 'cam[anthropic]' # Anthropic Claude support
+pip install 'cam[openai]'    # OpenAI GPT support
+pip install 'cam[mcp]'       # MCP protocol support
+pip install 'cam[all]'       # Everything
 ```
 
 ---
 
 ## 🧬 Memory Core — AI Conversation Auto-Memory (v2.0)
 
-> **This is Compound Wiki's core capability.** From "human feeds materials → AI organizes" to **"AI conversation automatically produces memories, fully transparent"**.
+> **This is CAM's core capability.** From "human feeds materials → AI organizes" to **"AI conversation automatically produces memories, fully transparent"**.
 
 ### The Problem It Solves
 
@@ -264,7 +264,7 @@ pip install 'compound-wiki[all]'       # Everything
 ### 3-Line Integration
 
 ```python
-from cw_daemon.client import CwClient, AutoRemember
+from cam_daemon.client import CamClient, AutoRemember
 
 # Pattern A: Decorator style (recommended)
 auto = AutoRemember(agent_id="my-bot")
@@ -273,7 +273,7 @@ reply = await my_llm.chat(user_msg)
 await auto(user_msg, reply)   # ← Auto extract → dedup → write → update index
 
 # Pattern B: Manual call
-client = CwClient()
+client = CamClient()
 await client.remember(user_msg, ai_response)
 
 # Pattern C: Any language that can send HTTP
@@ -311,7 +311,7 @@ v2.0 solution:
 ### Why "Compound"?
 
 Traditional KM is **linear** — input equals output.
-Compound Wiki is **exponential** — every operation creates cascading value:
+CAM is **exponential** — every operation creates cascading value:
 
 ```
 Round 1: Import material A → Create page A → +1 page
@@ -364,23 +364,23 @@ Round 4: LINT audit → Fix contradictions → Overall quality improves → All 
 
 ```bash
 # === Knowledge Base ===
-cw init my-wiki              # Initialize new KB
-cw ingest                    # Process raw/ materials → Wiki
-cw query "What is RAG?"     # Query knowledge base
-cw stats                     # Statistics dashboard
-cw lint                      # LINT health check
-cw check-raw                 # View unprocessed raw/ files
-cw status                    # Runtime overview
+cam init my-wiki              # Initialize new KB
+cam ingest                    # Process raw/ materials → Wiki
+cam query "What is RAG?"     # Query knowledge base
+cam stats                     # Statistics dashboard
+cam lint                      # LINT health check
+cam check-raw                 # View unprocessed raw/ files
+cam status                    # Runtime overview
 
 # === Daemon Management (v2.0) ===
-cw daemon start [--wiki ./wiki] [--port 9877]   # Start daemon
-cw daemon stop                                      # Stop gracefully
-cw daemon restart                                   # Restart
-cw daemon status                                    # View status
-cw daemon ping                                      # Quick health check
+cam daemon start [--wiki ./wiki] [--port 9877]   # Start daemon
+cam daemon stop                                      # Stop gracefully
+cam daemon restart                                   # Restart
+cam daemon status                                    # View status
+cam daemon ping                                      # Quick health check
 
 # === Other ===
-cw version                  # Show version
+cam version                  # Show version
 ```
 
 ---
@@ -401,7 +401,7 @@ Shared repo → Each member feeds domain material → AI compiles unified team W
 
 ```python
 # Add 3 lines to your Agent's main loop
-from cw_daemon.client import AutoRemember
+from cam_daemon.client import AutoRemember
 auto = AutoRemember(agent_id="my-agent")
 
 # After each conversation turn:
@@ -419,7 +419,7 @@ Supported Agents: OpenClaw / Hermes / Any Python Agent / curl / anything that sp
 **Both.** We provide a complete solution: Daemon + methodology spec (`schema/CLAUDE.md`) + project template + SDK. Core extraction work is done by AI — no model lock-in.
 
 ### Q: Does it conflict with Obsidian?
-**Not at all — highly complementary.** Obsidian handles Markdown visualization; Compound Wiki defines how AI auto-organizes those files. Open `wiki/` in Obsidian for the best experience.
+**Not at all — highly complementary.** Obsidian handles Markdown visualization; CAM defines how AI auto-organizes those files. Open `wiki/` in Obsidian for the best experience.
 
 ### Q: What about AI hallucinations?
 Four layers of protection: ① Raw materials are traceable ② LINT periodic audits ③ Incremental imports for verification ④ Uncertain content explicitly marked
@@ -429,14 +429,14 @@ Four layers of protection: ① Raw materials are traceable ② LINT periodic aud
 
 ### Q: How does this compare with RAG?
 
-| | RAG | Compound Wiki |
+| | RAG | CAM |
 |--|-----|---------------|
 | Knowledge form | Doc chunks + vector index | Structured Wiki pages + double-link network |
 | Query method | Re-retrieve + re-synthesize each time | Read already-structured content directly |
 | Knowledge persistence | None, use-and-discard | Yes, iterates and persists forever |
 | Long-term value | Low | **Compound growth** |
 
-They complement each other: Compound Wiki for core knowledge, RAG for massive temporary reference docs.
+They complement each other: CAM for core knowledge, RAG for massive temporary reference docs.
 
 ---
 
@@ -462,7 +462,7 @@ Contributions are welcome!
 
 ## 📄 License
 
-MIT License © 2026 Compound Wiki Contributors
+MIT License © 2026 CAM Contributors
 
 ---
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-OpenClaw + Compound Wiki Integration Test
+OpenClaw + CAM Integration Test
 ==========================================
 
-This script tests whether Compound Wiki works correctly when integrated
+This script tests whether CAM works correctly when integrated
 with OpenClaw as the Agent LLM backend.
 
 Usage:
-    cd compound-wiki/
+    cd cam/
     python3 memory_core/examples/openclaw_integration.py
 
 Requirements:
@@ -129,14 +129,14 @@ def extract_facts_from_response(ai_text: str) -> list:
 
 
 async def run_integration_test():
-    """Main integration test: OpenClaw + Compound Wiki."""
+    """Main integration test: OpenClaw + CAM."""
     
     print("=" * 70)
-    print("  OpenClaw x Compound Wiki — Integration Test")
+    print("  OpenClaw x CAM — Integration Test")
     print("=" * 70)
     
     # Setup paths
-    wiki_path = Path(os.path.expanduser("~/compound-wiki/wiki"))
+    wiki_path = Path(os.path.expanduser("~/cam/wiki"))
     wiki_path.mkdir(parents=True, exist_ok=True)
     
     # Initialize MemoryCore
@@ -291,7 +291,7 @@ async def run_integration_test():
     print(f"\n  RESULT: {'PASS ✅' if successful_turns >= total_turns - 1 else 'PARTIAL ⚠️'}")
     
     if total_facts > 0:
-        print(f"\n  🎉 Integration successful! Compound Wiki received {total_facts} facts from OpenClaw.")
+        print(f"\n  🎉 Integration successful! CAM received {total_facts} facts from OpenClaw.")
     else:
         print(f"\n  ⚠️ No facts extracted. OpenClaw responded but rule-based extraction found nothing.")
         print(f"   Tip: With a real LLM backend (not heuristic), extraction would be much richer.")

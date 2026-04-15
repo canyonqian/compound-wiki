@@ -1,5 +1,5 @@
 """
-Compound Wiki - Web Collector
+CAM - Web Collector
 ================================
 Automatically fetches web content and saves it to raw/ for ingestion.
 Supports: direct URLs, RSS feeds, bookmark files, batch URL lists.
@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-logger = logging.getLogger("compound_wiki.collector")
+logger = logging.getLogger("cam.collector")
 
 
 class WebCollector:
@@ -160,12 +160,12 @@ class WebCollector:
         meta_header = f"""---
 source_url: {final_url}
 collected_at: {datetime.now().isoformat()}
-collector: compound-wiki
+collector: cam
 ---
 
 # {self._title_from_url(final_url)}
 
-> Collected by Compound Wiki on {datetime.now().strftime('%Y-%m-%d %H:%M')}
+> Collected by CAM on {datetime.now().strftime('%Y-%m-%d %H:%M')}
 > Source: <{final_url}>
 
 ---

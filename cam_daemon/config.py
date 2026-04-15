@@ -1,8 +1,8 @@
 """
-Daemon Configuration
-====================
+CAM Daemon Configuration
+======================
 
-Centralized configuration for cw-daemon.
+Centralized configuration for cam-daemon.
 Supports file-based (JSON) and CLI overrides.
 """
 
@@ -27,10 +27,10 @@ class LLMConfig:
     def from_env(cls) -> "LLMConfig":
         """Create LLM config from environment variables."""
         return cls(
-            provider=os.environ.get("CW_LLM_PROVIDER", "openai"),
-            model=os.environ.get("CW_LLM_MODEL", "gpt-4o-mini"),
+            provider=os.environ.get("CAM_LLM_PROVIDER", "openai"),
+            model=os.environ.get("CAM_LLM_MODEL", "gpt-4o-mini"),
             api_key=os.environ.get("OPENAI_API_KEY") or os.environ.get("ANTHROPIC_API_KEY", ""),
-            base_url=os.environ.get("CW_LLM_BASE_URL", ""),
+            base_url=os.environ.get("CAM_LLM_BASE_URL", ""),
         )
 
 
@@ -65,7 +65,7 @@ class DaemonConfig:
     def __post_init__(self):
         if not self.pid_file:
             self.pid_file = str(
-                Path(self.wiki_path).parent / ".daemon" / "cw-daemon.pid"
+                Path(self.wiki_path).parent / ".daemon" / "cam-daemon.pid"
             )
         if not self.state_file:
             self.state_file = str(
@@ -103,7 +103,7 @@ class DaemonConfig:
     def save(self, path: Optional[str] = None) -> str:
         """Save current config to JSON file."""
         save_path = path or str(
-            Path(self.wiki_path).parent / "cw-daemon.json"
+            Path(self.wiki_path).parent / "cam-daemon.json"
         )
 
         data = {

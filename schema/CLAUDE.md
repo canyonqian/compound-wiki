@@ -1,4 +1,4 @@
-# Compound Wiki - AI 行为规范
+# CAM - AI 行为规范
 
 > **这是整个知识库的核心规则文件。** AI Agent 在操作此知识库时，必须严格遵循以下所有规则。任何对 Wiki 目录的读写操作都应以此文件为准则。
 
@@ -8,7 +8,7 @@
 
 ### 1.1 这是什么
 
-**Compound Wiki（复利维基）** 是一套基于本地 Markdown 文件的、由 AI Agent 驱动的个人/团队知识管理系统。核心理念是让 LLM 扮演全职知识管理员，通过"原始资料 → 结构化Wiki → 持续演化"的循环，实现知识的 **复利式积累与增长**。
+**CAM（Compound Agent Memory）** 是一套基于本地 Markdown 文件的、由 AI Agent 驱动的个人/团队知识管理系统。核心理念是让 LLM 扮演全职知识管理员，通过"原始资料 → 结构化Wiki → 持续演化"的循环，实现知识的 **复利式积累与增长**。
 
 ### 1.2 核心原则
 
@@ -25,7 +25,7 @@
 ## 二、目录结构与权限
 
 ```
-compound-wiki/
+cam/
 ├── raw/                    # 📥 原始资料层（人类写入，AI 只读）
 │   └── *.*                 #    任意格式的原始素材
 │
@@ -276,7 +276,7 @@ related: [[概念A]], [[概念B]]
 **输出格式**：
 
 ```markdown
-# Compound Wiki LINT 报告
+# CAM LINT 报告
 
 **执行时间**: YYYY-MM-DD HH:MM
 **扫描范围**: wiki/ 下共 N 个文件
@@ -478,12 +478,12 @@ raw/ 新文件 → Watcher 检测 → Pipeline.run()
 
 | 工具名 | 功能 |
 |--------|------|
-| `cw_ingest` | 向知识库添加内容（文本/URL/文章/笔记） |
-| `cw_query` | 查询知识库获取结构化答案 |
-| `cw_lint` | 执行 LINT 健康检查 |
-| `cw_stats` | 获取统计和增长指标 |
-| `cw_list_sources` | 查看所有数据源插件状态 |
-| `cw_ingest_from_source` | 触发特定数据源摄取 |
+| `cam_ingest` | 向知识库添加内容（文本/URL/文章/笔记） |
+| `cam_query` | 查询 knowledge base获取结构化答案 |
+| `cam_lint` | 执行 LINT 健康检查 |
+| `cam_stats` | 获取统计和增长指标 |
+| `cam_list_sources` | 查看所有数据源插件状态 |
+| `cam_ingest_from_source` | 触发特定数据源摄取 |
 
 **安装方式：**
 
@@ -494,7 +494,7 @@ raw/ 新文件 → Watcher 检测 → Pipeline.run()
     "compound-wiki": {
       "command": "python",
       "args": ["plugins/mcp_server.py"],
-      "env": { "CW_PROJECT_DIR": "${workspaceFolder}" }
+      "env": { "CAM_PROJECT_DIR": "${workspaceFolder}" }
     }
   }
 }
@@ -555,7 +555,7 @@ plugins/
 
 ## 十、Memory Core — 对话自动记忆系统（v2.0）
 
-> **这是 Compound Wiki 的核心创新。** 从"人喂资料 → AI整理"进化为 **"AI 对话自动产生记忆"**。
+> **这是 CAM 的核心创新。** 从"人喂资料 → AI整理"进化为 **"AI 对话自动产生记忆"**。
 
 ### 10.1 核心理念
 
@@ -615,7 +615,7 @@ Memory Core 通过 **Hook 引擎** 嵌入到 Agent 的对话生命周期中：
 | **DECISION** (决策) | ✅ | "选择 Redis 而非 Memcached 作为缓存" | ⭐ 高价值：记录决策过程 |
 | **PREFERENCE** (偏好) | 🎯 | "用户喜欢简洁的代码注释风格" | ⭐ 高价值：让 AI 越来越懂你 |
 | **TASK** (任务) | 📋 | "需要实现认证中间件" | 追踪待办事项 |
-| **ENTITY** (实体) | 🏷️ | "Compound Wiki, Andrej Karpathy" | 构建实体关系网 |
+| **ENTITY** (实体) | 🏷️ | "CAM, Andrej Karpathy" | 构建实体关系网 |
 
 ### 10.4 智能触发策略（不是每次都提取！）
 
@@ -788,4 +788,4 @@ curl -X POST http://localhost:9877/memory/hook \
 | **v2.0** | 2026-04-14 | **核心升级**: Memory Core — AI对话自动记忆系统。Hook引擎 + LLM提取器 + 去重器 + 并发安全SharedWiki + 知识图谱 + Agent SDK + MCP Server |
 | v1.2 | 2026-04-14 | 新增插件系统：MCP Server + 9种数据源插件 + 3种输出适配器 |
 | v1.1 | 2026-04-14 | 新增自动化引擎：文件监听、自动摄取、定时任务、网页采集、状态持久化 |
-| v1.0 | 2026-04-14 | 初始版本，定义完整的 Compound Wiki 规范 |
+| v1.0 | 2026-04-14 | 初始版本，定义完整的 CAM 规范 |
