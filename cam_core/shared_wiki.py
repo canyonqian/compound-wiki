@@ -45,7 +45,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-logger = logging.getLogger("memory_core.shared_wiki")
+logger = logging.getLogger("cam_core.shared_wiki")
 
 
 # ============================================================
@@ -305,7 +305,7 @@ class SharedWiki:
         self.config = config or DEFAULT_CONFIG
         
         # Lock file path
-        self._lock_path = str(self.wiki_path.parent / ".memory_core" / "wiki.lock")
+        self._lock_path = str(self.wiki_path.parent / ".cam_core" / "wiki.lock")
         
         # Ensure directories exist
         self.wiki_path.mkdir(parents=True, exist_ok=True)

@@ -14,7 +14,7 @@ CAM — AI 驱动的复利记忆系统
     cam stats
 
 作为 Python 库使用:
-    from memory_core import MemoryCore
+    from cam_core import MemoryCore
     
     mc = MemoryCore(wiki_path="./wiki")
     await mc.initialize()

@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
 
-logger = logging.getLogger("memory_core.deduplicator")
+logger = logging.getLogger("cam_core.deduplicator")
 
 
 class MergeAction(Enum):

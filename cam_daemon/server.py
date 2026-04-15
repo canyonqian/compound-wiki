@@ -202,7 +202,7 @@ class CamEngine:
     @property
     def wiki(self):
         if self._wiki is None:
-            from memory_core.shared_wiki import SharedWiki
+            from cam_core.shared_wiki import SharedWiki
             self._wiki = SharedWiki(
                 wiki_path=self.config.wiki_path,
                 raw_path=self.config.raw_path,
@@ -212,7 +212,7 @@ class CamEngine:
     @property
     def extractor(self):
         if self._extractor is None:
-            from memory_core.extractor import FactExtractor
+            from cam_core.extractor import FactExtractor
             self._extractor = FactExtractor(config=None)
             # Override LLM settings with daemon's own config
             self._extractor.llm_config = {
@@ -228,14 +228,24 @@ class CamEngine:
     @property
     def deduplicator(self):
         if self._deduplicator is None:
-            from memory_core.deduplicator import Deduplicator
-            from memory_core.config import MemoryConfig, DEFAULT_CONFIG
+            from cam_core.deduplicator import Deduplicator
+            from cam_core.config import MemoryConfig, DEFAULT_CONFIG
             # Build config with correct dedup threshold
             cfg = DEFAULT_CONFIG
             if hasattr(cfg, 'deduplication') and hasattr(cfg.deduplication, 'near_duplicate_threshold'):
                 cfg.deduplication.near_duplicate_threshold = self.config.dedup_similarity_threshold
             self._deduplicator = Deduplicator(config=cfg, wiki_index=self.wiki)
         return self._deduplicator
+
+    @property
+    def graph(self):
+        """Lazy-loaded knowledge graph — auto-built from Wiki facts."""
+        if self._graph is None:
+            from cam_core.memory_graph import MemoryGraph
+            graph_path = str(Path(self.config.wiki_path) / ".cam" / "graph.json")
+            self._graph = MemoryGraph(graph_path=graph_path)
+            self._graph._load()
+        return self._graph
 
     async def on_conversation_turn(self, req: HookRequest) -> HookResult:
         """
@@ -342,7 +352,7 @@ class CamEngine:
           2. LLM Fallback  — call external LLM API (needs API key / Ollama)
           3. Heuristic      — rule-based fallback (no LLM at all)
         """
-        from memory_core.extractor import FactType, ExtractedFact
+        from cam_core.extractor import FactType, ExtractedFact
 
         # ── Mode 1: Agent-Native (preferred) ──
         if req.extracted_facts:
@@ -391,7 +401,7 @@ class CamEngine:
         Simple rule-based extraction when LLM is unavailable.
         Catches common patterns like decisions, preferences, facts.
         """
-        from memory_core.extractor import FactType, ExtractedFact
+        from cam_core.extractor import FactType, ExtractedFact
 
         facts = []
         text = f"{req.user_message} {req.ai_response}"
@@ -463,12 +473,40 @@ class CamEngine:
         return result.unique_facts if hasattr(result, 'unique_facts') else facts
 
     async def _write_facts(self, facts: list, agent_id: str) -> int:
-        """Write facts to Wiki via atomic transaction."""
-        return await self.wiki.write_facts(
+        """Write facts to Wiki via atomic transaction, then auto-update knowledge graph."""
+        written = await self.wiki.write_facts(
             facts=facts,
             agent_id=agent_id,
             source="daemon_auto",
         )
+
+        # Auto-update knowledge graph with new facts
+        if written > 0:
+            try:
+                from cam_core.extractor import FactType
+                for fact in facts:
+                    if hasattr(fact, 'fact_type') and hasattr(fact, 'content'):
+                        node_type = {
+                            FactType.ENTITY: "entity",
+                            FactType.CONCEPT: "concept",
+                            FactType.DECISION: "decision",
+                            FactType.PREFERENCE: "preference",
+                            FactType.TASK: "task",
+                            FactType.FACT: "entity",
+                        }.get(fact.fact_type, "entity")
+
+                        self.graph.add_node(
+                            node_type=node_type,
+                            label=fact.content[:80],
+                            content=fact.content,
+                            source_file=getattr(fact, 'wiki_path', ''),
+                            agent_id=agent_id,
+                        )
+                self.graph._save()
+            except Exception as e:
+                logger.warning(f"Graph update failed: {e}")
+
+        return written
 
     async def _update_index(self) -> None:
         """Rebuild the index file with current page listing."""

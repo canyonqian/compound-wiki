@@ -102,8 +102,8 @@ class MemoryConfig:
     # Paths (resolved relative to project root)
     wiki_path: str = "./wiki"
     raw_path: str = "./raw" 
-    state_path: str = "./.memory_core/state"
-    graph_path: str = "./.memory_core/graph"
+    state_path: str = "./.cam_core/state"
+    graph_path: str = "./.cam_core/graph"
     
     # Sub-configs
     extraction: ExtractionRules = field(default_factory=ExtractionRules)

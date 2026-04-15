@@ -24,7 +24,7 @@ Installation:
     "mcpServers": {
       "cam-memory": {
         "command": "python",
-        "args": ["-m", "memory_core.mcp_server"],
+        "args": ["-m", "cam_core.mcp_server"],
         "env": {
           "WIKI_PATH": "/path/to/your/wiki"
         }
@@ -47,7 +47,7 @@ import os
 import sys
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger("memory_core.mcp_server")
+logger = logging.getLogger("cam_core.mcp_server")
 
 
 class MemoryMCPHandler:
@@ -539,7 +539,7 @@ async def run_mcp_server_stdio():
 
 
 def main():
-    """Entry point for `python -m memory_core.mcp_server`."""
+    """Entry point for `python -m cam_core.mcp_server`."""
     import asyncio
     asyncio.run(run_mcp_server_stdio())
 

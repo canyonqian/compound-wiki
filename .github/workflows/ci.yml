@@ -32,13 +32,15 @@ jobs:
           python -c "
           modules = [
               'cam',
-              'cam.shared_wiki',
-              'cam.deduplicator',
+              'cam_core',
+              'cam_core.shared_wiki',
+              'cam_core.extractor',
+              'cam_core.deduplicator',
+              'cam_core.memory_graph',
               'cam_daemon',
               'cam_daemon.server',
               'cam_daemon.config',
               'cam_daemon.client',
-              'cam_daemon.scheduler',
           ]
           ok = fail = 0
           for m in modules:
@@ -49,7 +51,7 @@ jobs:
               except Exception as e:
                   print(f'[FAIL] {m}: {e}')
                   fail += 1
-          print(f'\n{ok}/{len(modules)} modules OK, {fail} failed')
+          print(f'{ok}/{len(modules)} modules OK, {fail} failed')
           if fail > 0:
               raise SystemExit(1)
           "

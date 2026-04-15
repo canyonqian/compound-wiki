@@ -59,7 +59,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Callable, Awaitable
 from datetime import datetime
 
-logger = logging.getLogger("memory_core.extractor")
+logger = logging.getLogger("cam_core.extractor")
 
 
 class FactType(Enum):

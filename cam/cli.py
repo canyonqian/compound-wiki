@@ -149,7 +149,7 @@ def cmd_init(path="."):
         SYNTHESIS_DIR: None,
         OUTPUTS_DIR: None,
         SCHEMA_DIR / "templates": None,
-        ".memory_core": None,
+        ".cam_core": None,
         Path("auto") / "logs": None,
         Path("auto") / "state": None,
         Path("examples") / "raw-sample": None,
@@ -168,7 +168,7 @@ def cmd_init(path="."):
     # 写入 .gitkeep 到空目录
     gitkeep_dirs = [
         RAW_DIR, CONCEPT_DIR, ENTITY_DIR, SYNTHESIS_DIR,
-        OUTPUTS_DIR, ".memory_core", "auto/logs", "auto/state",
+        OUTPUTS_DIR, ".cam_core", "auto/logs", "auto/state",
         "examples/raw-sample",
     ]
     for gd in gitkeep_dirs:
@@ -480,7 +480,7 @@ def cmd_status(wiki_root=None):
             ("schema/CLAUDE.md", "规则定义"),
             ("wiki/index.md", "Wiki 索引"),
             ("raw/", "资料目录"),
-            (".memory_core/", "Memory Core"),
+            (".cam_core/", "Memory Core"),
             ("auto/config.json", "自动引擎"),
         ]
         print(f"\n  模块状态:")

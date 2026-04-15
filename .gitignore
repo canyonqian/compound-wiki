@@ -53,3 +53,6 @@ raw/collected/*.md
 # === Memory Core 运行时产物（不提交）===
 .memory_core/
 wiki/*-*.md  # 自动生成的带hash文件名页面
+.daemon/
+*.egg-info/
+raw/

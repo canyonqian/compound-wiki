@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from datetime import datetime
 from collections import defaultdict
 
-logger = logging.getLogger("memory_core.graph")
+logger = logging.getLogger("cam_core.graph")
 
 
 @dataclass
@@ -107,7 +107,7 @@ class MemoryGraph:
     """
     
     def __init__(self, graph_path: str = None):
-        self.graph_path = graph_path or ".memory_core/graph.json"
+        self.graph_path = graph_path or ".cam_core/graph.json"
         
         # Core data structures
         self._nodes: Dict[str, GraphNode] = {}
