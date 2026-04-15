@@ -445,7 +445,15 @@ class Deduplicator:
 
         # Fallback: scan wiki directories directly
         facts = []
-        wiki_path = Path(self.config.storage.wiki_path) if self.config else None
+
+        # Handle different config shapes (MemoryConfig vs nested storage)
+        _cfg = self.config if self.config else None
+        if hasattr(_cfg, 'storage') and _cfg.storage:
+            wiki_path = Path(getattr(_cfg.storage, 'wiki_path', ''))
+        elif hasattr(_cfg, 'wiki_path'):
+            wiki_path = Path(_cfg.wiki_path)
+        else:
+            return facts
         if not wiki_path or not wiki_path.exists():
             return facts
 
