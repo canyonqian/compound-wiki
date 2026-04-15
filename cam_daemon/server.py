@@ -261,8 +261,10 @@ class CamEngine:
             # Track agent
             self._stats["agents_seen"].add(req.agent_id)
 
-            # Skip if no meaningful content
-            if not req.user_message.strip() and not req.ai_response.strip():
+            # Skip if no meaningful content (Agent-Native: extracted_facts counts as content)
+            has_content = bool(req.user_message.strip() or req.ai_response.strip())
+            has_native_facts = bool(req.extracted_facts)
+            if not has_content and not has_native_facts:
                 return HookResult(
                     status="ok",
                     message="Empty content, skipped.",
@@ -632,6 +634,25 @@ if HAS_FASTAPI:
             description="Pre-extracted facts (Agent-Native mode). "
                         "If provided, daemon skips LLM call and uses these directly.",
         )
+        # Alternative format: full conversation array (auto-parsed)
+        conversation: Optional[List[Dict[str, str]]] = Field(
+            default=None,
+            description="Conversation history. "
+                        "Auto-parsed to user_message + ai_response if not set directly.",
+        )
+
+        def parse_conversation(self) -> tuple:
+            """Extract user_message and ai_response from conversation array."""
+            if self.user_message or self.ai_response:
+                return self.user_message, self.ai_response
+            if not self.conversation:
+                return "", ""
+            user_msgs = [m.get("content", "") for m in self.conversation
+                        if m.get("role") == "user"]
+            ai_msgs = [m.get("content", "") for m in self.conversation
+                      if m.get("role") in ("assistant", "ai")]
+            return (user_msgs[-1] if user_msgs else "",
+                    ai_msgs[-1] if ai_msgs else "")
 
     class IngestRequestModel(BaseModel):
         content: str
@@ -655,9 +676,10 @@ if HAS_FASTAPI:
             Omit extracted_facts. Daemon will call external LLM or use heuristics.
         """
         engine = get_engine()
+        um, ar = req.parse_conversation()
         hook_req = HookRequest(
-            user_message=req.user_message,
-            ai_response=req.ai_response,
+            user_message=um,
+            ai_response=ar,
             agent_id=req.agent_id,
             session_id=req.session_id,
             metadata=req.metadata,
@@ -722,9 +744,21 @@ else:
 
             try:
                 if path == "/hook":
+                    # Support conversation array format
+                    um = data.get("user_message", "")
+                    ar = data.get("ai_response", "")
+                    if not um and not ar:
+                        conv = data.get("conversation", [])
+                        if conv:
+                            user_msgs = [m.get("content","") for m in conv
+                                        if m.get("role") == "user"]
+                            ai_msgs = [m.get("content","") for m in conv
+                                      if m.get("role") in ("assistant","ai")]
+                            um = user_msgs[-1] if user_msgs else ""
+                            ar = ai_msgs[-1] if ai_msgs else ""
                     req = HookRequest(
-                        user_message=data.get("user_message", ""),
-                        ai_response=data.get("ai_response", ""),
+                        user_message=um,
+                        ai_response=ar,
                         agent_id=data.get("agent_id", "unknown"),
                         session_id=data.get("session_id", ""),
                         metadata=data.get("metadata", {}),
