@@ -728,6 +728,27 @@ class CamContextEngine implements ContextEngine {
       }
     }
 
+    // Text-based: detect file paths in plain text or within content blocks
+    const textContent = this.extractText(content);
+    if (textContent) {
+      const unixPaths = textContent.match(
+        /(?:^|\s)(?:\/|~\/)[\w\-.\/]+\.(?:py|js|ts|tsx|jsx|md|pdf|json|ya?ml|csv|txt|png|jpe?g|gif|svg|docx?|xlsx?|pptx?|zip|tar\.gz|rs|toml|cfg|conf|ini|log|sql|sh|bat|ps1|env|lock|html|css|scss|vue|svelte)/gi,
+      );
+      const winPaths = textContent.match(
+        /[A-Za-z]:\\[\w\-. ]+\.(?:py|js|ts|tsx|jsx|md|pdf|json|ya?ml|csv|txt|png|jpe?g|gif|svg|docx?|xlsx?|pptx?|zip|tar\.gz|rs|toml|cfg|conf|ini|log|sql|sh|bat|ps1|env|lock|html|css|scss|vue|svelte)/gi,
+      );
+      for (const p of unixPaths || []) {
+        if (!attachments.some((a) => a.name === p.trim())) {
+          attachments.push({ type: 'file', name: p.trim() });
+        }
+      }
+      for (const p of winPaths || []) {
+        if (!attachments.some((a) => a.name === p)) {
+          attachments.push({ type: 'file', name: p });
+        }
+      }
+    }
+
     return attachments;
   }
 }
