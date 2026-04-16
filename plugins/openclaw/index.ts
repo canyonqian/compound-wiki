@@ -291,72 +291,71 @@ function heuristicExtract(
   // Skip greetings, short replies
   const greetingPatterns = [/^(好的|好的，|好的!|好的！|明白|收到|没问题|可以|当然|ok|yes|sure|hi|hello|hey)/i];
   if (greetingPatterns.some((p) => p.test(agentResponse.trim()))) return facts;
-  if (agentResponse.trim().length < 50) return facts;
+  if (agentResponse.trim().length < 80) return facts;
 
-  // 1. Extract code-heavy sections as technical knowledge
-  const codeBlocks = agentResponse.match(/```(\w+)?\n([\s\S]*?)```/g);
+  // Strip markdown for cleaner knowledge storage (keep key formatting)
+  const cleanText = agentResponse
+    .replace(/```[\s\S]*?```/g, (m) => m.slice(0, 500)) // truncate code blocks
+    .replace(/#{2,}\s/g, "") // strip sub-headers
+    .replace(/#{1}\s/g, "") // strip main headers
+    .replace(/\*\*(.+?)\*\*/g, "$1") // strip bold markers but keep text
+    .replace(/\*(.+?)\*/g, "$1") // strip italic markers
+    .replace(/\|[\s\-:|]+\|/g, "") // strip table borders
+    .replace(/---+/g, "") // strip horizontal rules
+    .replace(/\n{3,}/g, "\n\n") // normalize whitespace
+    .trim();
+
+  // 1. Technical explanation → concept
+  const explanationSignals = [
+    /原理|机制|工作方式|运行方式|如何实现|底层|工作流|架构/,
+    /because|principle|mechanism|how it works|architecture|workflow/,
+  ];
+  const hasExplanation = explanationSignals.some((p) => p.test(agentResponse));
+
+  if (hasExplanation && cleanText.length > 50) {
+    // Use user question as title, full cleaned response as content
+    const title = userMessage
+      ? userMessage.replace(/[？?]/g, "").slice(0, 80)
+      : agentResponse.split("\n")[0].slice(0, 80);
+    const content = `[Q: ${userMessage || "(technical question)"}]\n\n${cleanText.slice(0, 1500)}`;
+    facts.push({ type: "concept", content });
+  }
+
+  // 2. Comparison/contrast → synthesis
+  const comparisonSignals = [
+    /vs\.?|对比|区别|相比|不同于|与.*不同|差异|优劣|权衡|trade.?off/i,
+  ];
+  if (comparisonSignals.some((p) => p.test(agentResponse))) {
+    // Extract the comparison as a synthesis page
+    const title = agentResponse.match(/^# (.+)$/m)?.[1]?.slice(0, 80) || "Comparison";
+    const comparisonText = cleanText.slice(0, 1000);
+    facts.push({
+      type: "synthesis",
+      content: `[${title}]\n\n${comparisonText}`,
+    });
+  }
+
+  // 3. Solution/steps → synthesis
+  const solutionSignals = [
+    /解决方案|解决方法|修复方法|步骤|第一步|首先.*然后|最后.*结论/,
+    /to fix|solution|step 1|first.*then|finally|workaround/,
+  ];
+  if (solutionSignals.some((p) => p.test(agentResponse))) {
+    facts.push({
+      type: "synthesis",
+      content: `[Solution]\n${cleanText.slice(0, 1000)}`,
+    });
+  }
+
+  // 4. Code-heavy response with tech names → entity mention
+  const codeBlocks = agentResponse.match(/```(\w+)?\n[\s\S]*?```/g);
   if (codeBlocks && codeBlocks.length > 0) {
-    const techNames = agentResponse.match(/\b(SQLite|Docker|PostgreSQL|Redis|MongoDB|MySQL|GraphQL|REST|gRPC|WebSocket|Nginx|Kafka|RabbitMQ|React|Vue|Angular|Next\.?js|Nuxt|Django|Flask|FastAPI|Express|Spring|TensorFlow|PyTorch|Ollama|Kubernetes|Terraform|Ansible|Git)\b/g);
+    const techNames = agentResponse.match(/\b(SQLite|PostgreSQL|Redis|MongoDB|MySQL|GraphQL|REST|gRPC|WebSocket|Nginx|Kafka|RabbitMQ|React|Vue|Next\.?js|Django|Flask|FastAPI|Express|TensorFlow|PyTorch|Ollama|Kubernetes|Terraform|Docker|Git|WAL|JDBC|ORM|ACID)\b/g);
     for (const tech of [...new Set(techNames || [])]) {
-      facts.push({
-        type: "concept",
-        content: `${tech}: ${userMessage}`,
-      });
-    }
-  }
-
-  // 2. Extract explanations (contains "因为", "原理", "机制", "作用是", "通过")
-  const explanationPatterns = [
-    /(?:原理|机制|作用是|工作原理|运行方式|如何实现|底层)/,
-    /(?:because|principle|mechanism|works by|through|under the hood)/,
-  ];
-  if (explanationPatterns.some((p) => p.test(agentResponse))) {
-    const sentences = agentResponse.split(/[。.!！]/);
-    for (const s of sentences) {
-      const trimmed = s.trim();
-      if (trimmed.length > 20 && trimmed.length < 300) {
-        facts.push({ type: "concept", content: trimmed });
-        break;
-      }
-    }
-  }
-
-  // 3. Extract comparisons (contains "vs", "对比", "区别")
-  const comparisonPatterns = [
-    /(?:vs\.?|对比|区别|相比|不同于|与...不同)/,
-  ];
-  if (comparisonPatterns.some((p) => p.test(agentResponse))) {
-    facts.push({
-      type: "synthesis",
-      content: `Comparison: ${userMessage}`,
-    });
-  }
-
-  // 4. Extract problem-solving steps
-  const solutionPatterns = [
-    /(?:解决方案|解决方法|修复方法|步骤[一二三四1234]|第一步|首先|然后|最后)/,
-    /(?:to fix|solution|step 1|first|then|finally|workaround)/,
-  ];
-  if (solutionPatterns.some((p) => p.test(agentResponse))) {
-    facts.push({
-      type: "synthesis",
-      content: `Solution: ${agentResponse.slice(0, 300)}`,
-    });
-  }
-
-  // 5. Extract entity mentions (specific tools, projects, services)
-  const entityPatterns = [
-    /\b([A-Z][a-zA-Z0-9]+(?:\s+[A-Z][a-zA-Z0-9]+)*)\b/g,
-  ];
-  // Only extract entities from technical context
-  if (agentResponse.length > 100 && codeBlocks) {
-    const mentions = agentResponse.match(/\b([A-Z][a-zA-Z]{2,})\b/g);
-    if (mentions) {
-      const filtered = mentions.filter((m) => !["The", "This", "That", "These", "Those", "There", "What", "When", "Where", "Which", "While", "With", "Without", "Would", "Could", "Should"].includes(m));
-      for (const m of [...new Set(filtered)].slice(0, 3)) {
+      if (!facts.some((f) => f.content.includes(tech))) {
         facts.push({
           type: "entity",
-          content: `${m}: mentioned in technical discussion`,
+          content: `${tech}: mentioned in technical context — ${userMessage.slice(0, 100)}`,
         });
       }
     }
@@ -365,8 +364,9 @@ function heuristicExtract(
   // Dedup
   const seen = new Set<string>();
   return facts.filter((f) => {
-    if (seen.has(f.content)) return false;
-    seen.add(f.content);
+    const key = f.content.slice(0, 60);
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
 }
@@ -600,7 +600,7 @@ const camPlugin = {
     });
 
     // ── Hook 2: extract knowledge from agent's LLM response ──
-    api.on("llm_output", (event: any) => {
+    api.on("llm_output", (event: any, ctx: any) => {
       const userMsg = engine.pendingUserMsg || "";
 
       // Get agent response text from assistantTexts
@@ -611,14 +611,17 @@ const camPlugin = {
 
       if (!agentText || agentText.length < 50) return;
 
-      console.log(`[cam-extract] llm_output: agent response ${agentText.length} chars, model=${event.model || "?"}`);
+      const agentId = ctx?.agentId || engine.getAgentId() || "unknown";
+      const sessionId = ctx?.sessionId || event.sessionId || "llm-output";
+
+      console.log(`[cam-extract] llm_output: agent response ${agentText.length} chars, model=${event.model || "?"}, agent=${agentId}`);
 
       // Store raw conversation
-      engine.storeRawConversation(
+      store.storeRawConversation(
         userMsg || "(unknown)",
         agentText.slice(0, 2000),
-        engine.getAgentId(),
-        event.sessionId || "llm-output",
+        agentId,
+        sessionId,
       );
 
       // Heuristic extraction
