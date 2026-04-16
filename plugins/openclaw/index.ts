@@ -1,29 +1,33 @@
 /**
- * CAM — OpenClaw Plugin v5.1 (Agent-Native Extraction + Auto-Detect Files)
+ * CAM — Compound Agent Memory Plugin v6.0 (Self-Contained)
  *
- * 核心架构转变：不再由 daemon 调 LLM 提取知识，
- * 而是让 Agent 用自带的 LLM 提取知识，通过 tool 回传给 daemon 存储。
+ * 核心架构：完全自包含，不依赖外部 Python daemon。
+ * 像 LCM 一样，所有逻辑都在插件内部完成。
  *
- * v5.1 新增：文件/图片自动检测
- * - ingest() 自动检测消息中的附件（文件路径、图片、文档引用）
- * - before_prompt_build 注入明确的文件处理指令
- * - Agent 看到"你收到了文件"的提示后自动调用 cam_extract_file
+ * 存储：直接读写 wiki/ 目录（Markdown 文件 + JSON 索引）
+ *   - wiki/entity/     — 实体页（人、项目、工具）
+ *   - wiki/concept/    — 概念页（技术、方法、模式）
+ *   - wiki/synthesis/  — 综合页（决策、偏好、经验）
  *
  * 三层机制：
- *   1️⃣ ContextEngine (框架自动调用，不受 activateGlobalSideEffects 限制)
- *      - ingest()    → 存原始对话 + 检测文件/图片附件
- *      - assemble()  → 召回相关记忆注入 prompt（不调 LLM）
+ *   L1 ContextEngine（框架自动调用）
+ *     - ingest()   → 直接存消息到 wiki（entity/concept/synthesis）
+ *     - assemble() → 从 wiki 检索相关记忆注入 prompt
  *
- *   2️⃣ Tool (Agent 主动调用 — 核心！Agent 用自身 LLM 提取后回传)
- *      - cam_extract      → Agent 提取的知识存入 wiki（最核心！）
- *      - cam_query        → 查询知识库
- *      - cam_stats        → 统计面板
- *      - cam_extract_file → 文件/图片/文档提取 → 存入 wiki
+ *   L2 Tool（Agent 主动调用）
+ *     - cam_extract      → Agent 提取的知识直接写 wiki（最核心！）
+ *     - cam_query        → 搜索知识库
+ *     - cam_extract_file → 文件/图片提取 → 写 wiki
  *
- *   3️⃣ Hook (补充 — 注入提取指令 + 文件检测提示)
- *      - before_prompt_build → 注入记忆召回 + 提取指令 + 文件处理提醒
- *      - message_received    → 缓存用户消息 + 检测文件
- *      - llm_output          → 日志
+ *   L3 Hook（补充增强）
+ *     - before_prompt_build → 注入记忆召回指令 + 文件处理提醒
+ *     - message_received    → 检测文件/图片附件
+ *
+ * Agent 兼容性：
+ *   - 任何支持 OpenClaw 插件的 Agent 都能用
+ *   - 不需要 Python daemon、不需要外部 LLM
+ *   - Agent 用自己的 LLM 提取知识 → cam_extract 存储
+ *   - ingest 自动用启发式规则存储明显的事实
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
@@ -32,397 +36,678 @@ import type {
   AssembleResult,
   IngestResult,
 } from "openclaw/plugin-sdk";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  statSync,
+  appendFileSync,
+  unlinkSync,
+} from "node:fs";
+import { join, basename } from "node:path";
+import { createHash } from "node:crypto";
 
 // ============================================================
 // 配置
 // ============================================================
 
-const DAEMON_URL = process.env.CAM_DAEMON_URL || "http://127.0.0.1:9877";
-const DAEMON_TIMEOUT_MS = 10000;
-
 function resolveConfig(cfg: Record<string, unknown>) {
   return {
-    wikiPath: ((cfg.wikiPath as string) || process.env.CAM_PROJECT_DIR || process.cwd()).replace(/\/+$/, ""),
+    wikiPath: ((cfg.wikiPath as string) ||
+      process.env.CAM_WIKI_PATH ||
+      process.env.CAM_PROJECT_DIR ||
+      process.cwd()) as string,
     injectOnPrompt: cfg.injectOnPrompt !== false,
-    extractOnOutput: cfg.extractOnOutput !== false,
-    daemonUrl: (cfg.daemonUrl as string) || DAEMON_URL,
+    maxRecallPages: Math.min(Math.max((cfg.maxRecallPages as number) || 5, 1), 20),
   };
 }
 
 // ============================================================
-// Daemon HTTP Client
+// CamMemoryStore — 直接读写 wiki 目录
 // ============================================================
 
-interface DaemonResponse {
-  success?: boolean;
-  status: string;
-  facts_extracted?: number;
-  facts_written?: number;
-  results_found?: number;
-  matches?: Array<{
-    page: string;
+type FactCategory = "entity" | "concept" | "synthesis";
+
+interface StoredFact {
+  name: string;
+  category: FactCategory;
+  content: string;
+  tags: string[];
+  agentId: string;
+  timestamp: string;
+  sourceSnippet: string;
+}
+
+class CamMemoryStore {
+  private wikiPath: string;
+  private indexPath: string;
+  private index: Map<string, StoredFact> = new Map();
+  private dirty = false;
+
+  constructor(wikiPath: string) {
+    this.wikiPath = wikiPath.replace(/\/+$/, "");
+    this.indexPath = join(this.wikiPath, ".cam-index.json");
+
+    // Ensure directory structure
+    for (const dir of ["entity", "concept", "synthesis"]) {
+      const p = join(this.wikiPath, dir);
+      if (!existsSync(p)) mkdirSync(p, { recursive: true });
+    }
+    if (!existsSync(join(this.wikiPath, "raw"))) {
+      mkdirSync(join(this.wikiPath, "raw"), { recursive: true });
+    }
+
+    this.loadIndex();
+  }
+
+  // ── Index Management ──
+
+  private loadIndex(): void {
+    try {
+      if (existsSync(this.indexPath)) {
+        const data = JSON.parse(readFileSync(this.indexPath, "utf-8"));
+        if (data.facts && Array.isArray(data.facts)) {
+          for (const f of data.facts) {
+            this.index.set(f.name, f);
+          }
+        }
+        console.log(`[cam-store] Loaded index: ${this.index.size} facts`);
+      }
+    } catch (e) {
+      console.warn(`[cam-store] Failed to load index, starting fresh: ${e}`);
+      this.index = new Map();
+    }
+  }
+
+  private saveIndex(): void {
+    if (!this.dirty) return;
+    try {
+      const data = {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        facts: Array.from(this.index.values()),
+      };
+      writeFileSync(this.indexPath, JSON.stringify(data, null, 2), "utf-8");
+      this.dirty = false;
+    } catch (e) {
+      console.error(`[cam-store] Failed to save index: ${e}`);
+    }
+  }
+
+  // ── Core Operations ──
+
+  /**
+   * Store a fact into the wiki directory.
+   * Returns true if a new page was written, false if deduplicated.
+   */
+  storeFact(fact: StoredFact): boolean {
+    // Dedup check by name
+    const existing = this.index.get(fact.name);
+    if (existing) {
+      // Update existing: append new info if content differs
+      const existingPath = this.getWikiPagePath(existing.category, existing.name);
+      if (existsSync(existingPath)) {
+        const existingContent = readFileSync(existingPath, "utf-8");
+        if (existingContent.includes(fact.content)) {
+          // Already contains this info
+          return false;
+        }
+        // Append new info to existing page
+        const appendSection = `\n\n## ${fact.timestamp}\n\n${fact.content}`;
+        appendFileSync(existingPath, appendSection, "utf-8");
+        this.dirty = true;
+        this.saveIndex();
+        return true;
+      }
+    }
+
+    // Write new wiki page
+    const pagePath = this.getWikiPagePath(fact.category, fact.name);
+    const dir = join(this.wikiPath, fact.category);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+    const pageContent = this.renderWikiPage(fact);
+    writeFileSync(pagePath, pageContent, "utf-8");
+
+    // Update index
+    this.index.set(fact.name, fact);
+    this.dirty = true;
+    this.saveIndex();
+    return true;
+  }
+
+  /**
+   * Store raw conversation turn (ingest).
+   */
+  storeRawConversation(
+    userMsg: string,
+    aiResponse: string,
+    agentId: string,
+    sessionId: string,
+  ): void {
+    const rawDir = join(this.wikiPath, "raw");
+    if (!existsSync(rawDir)) mkdirSync(rawDir, { recursive: true });
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `${timestamp}-${agentId}-${sessionId.slice(0, 8)}.md`;
+
+    const content = [
+      `# Conversation Turn`,
+      ``,
+      `- **Agent**: ${agentId}`,
+      `- **Session**: ${sessionId}`,
+      `- **Time**: ${new Date().toISOString()}`,
+      ``,
+      `## User`,
+      ``,
+      userMsg,
+      ``,
+      `## Assistant`,
+      ``,
+      aiResponse,
+    ].join("\n");
+
+    writeFileSync(join(rawDir, filename), content, "utf-8");
+  }
+
+  /**
+   * Query the wiki for relevant memories.
+   * Simple keyword-based search (no LLM needed).
+   */
+  query(question: string, topK: number = 5): Array<{
     name: string;
-    preview: string;
-    content_snippet: string;
-  }>;
-  question?: string;
-  error?: string;
-  processing_time_ms?: number;
-  throttled?: boolean;
-  message?: string;
-  [key: string]: unknown;
-}
+    category: FactCategory;
+    content: string;
+    relevance: number;
+  }> {
+    const keywords = this.extractKeywords(question);
+    if (keywords.length === 0) return [];
 
-async function daemonPost(
-  endpoint: string,
-  body: Record<string, unknown>,
-  baseUrl?: string,
-): Promise<DaemonResponse | null> {
-  const url = `${baseUrl || DAEMON_URL}${endpoint}`;
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), DAEMON_TIMEOUT_MS);
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
-    if (!res.ok) {
-      console.log(`[cam] ${endpoint}: daemon returned ${res.status}`);
-      return null;
+    const results: Array<{
+      name: string;
+      category: FactCategory;
+      content: string;
+      relevance: number;
+    }> = [];
+
+    for (const [name, fact] of this.index) {
+      const searchText = `${name} ${fact.content} ${fact.tags.join(" ")}`.toLowerCase();
+      let matchCount = 0;
+      for (const kw of keywords) {
+        if (searchText.includes(kw.toLowerCase())) matchCount++;
+      }
+      if (matchCount > 0) {
+        // Read actual page content for preview
+        const pagePath = this.getWikiPagePath(fact.category, fact.name);
+        let pageContent = fact.content;
+        try {
+          if (existsSync(pagePath)) {
+            pageContent = readFileSync(pagePath, "utf-8").slice(0, 500);
+          }
+        } catch {}
+
+        results.push({
+          name,
+          category: fact.category,
+          content: pageContent,
+          relevance: matchCount / keywords.length,
+        });
+      }
     }
-    return (await res.json()) as DaemonResponse;
-  } catch (_) {
-    return null;
-  }
-}
 
-async function daemonGet(endpoint: string, params: Record<string, string> = {}): Promise<DaemonResponse | null> {
-  const url = new URL(`${DAEMON_URL}${endpoint}`);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), DAEMON_TIMEOUT_MS);
-    const res = await fetch(url.toString(), { signal: controller.signal });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    return (await res.json()) as DaemonResponse;
-  } catch (_) {
-    return null;
+    // Sort by relevance, take top K
+    results.sort((a, b) => b.relevance - a.relevance);
+    return results.slice(0, topK);
+  }
+
+  /**
+   * Get statistics.
+   */
+  getStats(): Record<string, unknown> {
+    const byCategory: Record<string, number> = { entity: 0, concept: 0, synthesis: 0 };
+    for (const [, fact] of this.index) {
+      byCategory[fact.category] = (byCategory[fact.category] || 0) + 1;
+    }
+
+    let totalBytes = 0;
+    let totalPages = 0;
+    for (const dir of ["entity", "concept", "synthesis"]) {
+      const p = join(this.wikiPath, dir);
+      try {
+        const files = readdirSync(p).filter((f) => f.endsWith(".md"));
+        totalPages += files.length;
+        for (const f of files) {
+          try {
+            totalBytes += statSync(join(p, f)).size;
+          } catch {}
+        }
+      } catch {}
+    }
+
+    return {
+      totalFacts: this.index.size,
+      totalPages,
+      totalBytes,
+      byCategory,
+      wikiPath: this.wikiPath,
+    };
+  }
+
+  // ── Helpers ──
+
+  private getWikiPagePath(category: FactCategory, name: string): string {
+    // Sanitize name for filesystem
+    const safeName = name
+      .replace(/[^a-zA-Z0-9\u4e00-\u9fff-_]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+    return join(this.wikiPath, category, `${safeName}.md`);
+  }
+
+  private renderWikiPage(fact: StoredFact): string {
+    return [
+      `# ${fact.name}`,
+      ``,
+      `- **Category**: ${fact.category}`,
+      `- **Agent**: ${fact.agentId}`,
+      `- **Created**: ${fact.timestamp}`,
+      `- **Tags**: ${fact.tags.join(", ") || "none"}`,
+      ``,
+      `## Content`,
+      ``,
+      fact.content,
+      ``,
+      `## Source`,
+      ``,
+      fact.sourceSnippet
+        ? `> ${fact.sourceSnippet.slice(0, 200)}`
+        : "*Extracted by agent*",
+      ``,
+    ].join("\n");
+  }
+
+  private extractKeywords(text: string): string[] {
+    // Split on whitespace/punctuation, filter short words
+    const words = text
+      .toLowerCase()
+      .split(/[\s,，。.!！?？:：;；\-\(\)（）\[\]【】{}]+/)
+      .filter((w) => w.length >= 2);
+
+    // Remove common stop words (English + Chinese)
+    const stopWords = new Set([
+      "the", "a", "an", "is", "are", "was", "were", "be", "been",
+      "being", "have", "has", "had", "do", "does", "did", "will",
+      "would", "could", "should", "may", "might", "shall", "can",
+      "need", "dare", "ought", "used", "to", "of", "in", "for",
+      "on", "with", "at", "by", "from", "as", "into", "through",
+      "during", "before", "after", "above", "below", "between",
+      "out", "off", "over", "under", "again", "further", "then",
+      "once", "and", "but", "or", "nor", "not", "so", "yet",
+      "both", "either", "neither", "each", "every", "all", "any",
+      "few", "more", "most", "other", "some", "such", "no", "only",
+      "own", "same", "than", "too", "very", "just", "because",
+      "的", "了", "在", "是", "我", "有", "和", "就", "不", "人",
+      "都", "一", "一个", "上", "也", "很", "到", "说", "要", "去",
+      "你", "会", "着", "没有", "看", "好", "自己", "这",
+    ]);
+
+    return [...new Set(words.filter((w) => !stopWords.has(w)))];
+  }
+
+  /**
+   * Heuristic: auto-classify a fact based on content.
+   */
+  classifyFact(content: string, nameHint?: string): FactCategory {
+    const text = (content + " " + (nameHint || "")).toLowerCase();
+
+    // Entity indicators: proper nouns, specific names, tools, projects
+    const entityPatterns = [
+      /\b(project|tool|framework|library|app|service|server|agent|model|company|team|person)\b/i,
+      /^[A-Z][a-z]+/,  // Starts with capital (proper noun)
+    ];
+
+    // Synthesis indicators: decisions, preferences, conclusions
+    const synthesisPatterns = [
+      /\b(decided|prefer|chose|selected|recommend|conclusion|should|must|always|never)\b/i,
+      /\b(决定|偏好|选择|建议|应该|必须|总是|从不)\b/,
+    ];
+
+    // Check synthesis first (more specific)
+    for (const pat of synthesisPatterns) {
+      if (pat.test(text)) return "synthesis";
+    }
+
+    // Then entity
+    for (const pat of entityPatterns) {
+      if (pat.test(text)) return "entity";
+    }
+
+    // Default: concept
+    return "concept";
+  }
+
+  /**
+   * Heuristic: extract notable facts from a conversation turn.
+   * Used by ingest() when Agent doesn't explicitly call cam_extract.
+   */
+  heuristicExtract(
+    userMsg: string,
+    aiResponse: string,
+  ): Array<Omit<StoredFact, "timestamp">> {
+    const facts: Array<Omit<StoredFact, "timestamp">> = [];
+    const text = `${userMsg} ${aiResponse}`;
+
+    // Decision patterns
+    const decisionPatterns = [
+      { re: /(?:we\s+)?(?:decided|chose|selected|will\s+use|going\s+with)\s+(.+?)(?:\.|,|$)/i, type: "synthesis" as FactCategory },
+      { re: /(?:我们)?(?:决定|选择|采用|使用)\s*(.+?)(?:。|，|$)/, type: "synthesis" as FactCategory },
+    ];
+
+    for (const { re, type } of decisionPatterns) {
+      const match = text.match(re);
+      if (match && match[1] && match[1].trim().length >= 5) {
+        facts.push({
+          name: this.sanitizeName(match[1].trim().slice(0, 50)),
+          category: type,
+          content: match[0].trim(),
+          tags: ["auto-extracted", "decision"],
+          agentId: "heuristic",
+          sourceSnippet: text.slice(0, 200),
+        });
+      }
+    }
+
+    // Preference patterns
+    const prefPatterns = [
+      { re: /(?:i\s+prefer|like\s+using|my\s+favorite|always\s+use)\s+(.+?)(?:\.|,|$)/i, type: "synthesis" as FactCategory },
+    ];
+
+    for (const { re, type } of prefPatterns) {
+      const match = text.match(re);
+      if (match && match[1] && match[1].trim().length >= 3) {
+        facts.push({
+          name: this.sanitizeName(match[1].trim().slice(0, 50)),
+          category: type,
+          content: match[0].trim(),
+          tags: ["auto-extracted", "preference"],
+          agentId: "heuristic",
+          sourceSnippet: text.slice(0, 200),
+        });
+      }
+    }
+
+    return facts;
+  }
+
+  private sanitizeName(name: string): string {
+    return name
+      .replace(/[^a-zA-Z0-9\u4e00-\u9fff\s-_]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 80);
   }
 }
 
 // ============================================================
-// 文件/图片自动检测
-// ============================================================
-
-interface DetectedAttachment {
-  type: "file" | "image" | "document";
-  path?: string;
-  name?: string;
-  mimeType?: string;
-  description: string;
-}
-
-/**
- * 从消息中检测文件/图片附件
- * OpenClaw 的消息格式可能包含：
- * - content 数组中的 image 类型块（图片）
- * - content 数组中的 file/document 类型块（文件）
- * - 文本中的文件路径引用
- */
-function detectAttachments(message: any): DetectedAttachment[] {
-  const attachments: DetectedAttachment[] = [];
-  if (!message) return attachments;
-
-  const content = message.content;
-
-  // 1. 结构化消息格式（OpenClaw 多模态消息）
-  if (Array.isArray(content)) {
-    for (const block of content) {
-      if (!block || typeof block !== "object") continue;
-
-      // 图片块
-      if (block.type === "image" || block.type === "image_url") {
-        attachments.push({
-          type: "image",
-          mimeType: block.mimeType || block.image_url?.url?.match(/data:(image\/\w+)/)?.[1],
-          description: block.alt || block.caption || "User shared an image",
-        });
-      }
-      // 文件/文档块
-      if (block.type === "file" || block.type === "document" || block.type === "attachment") {
-        attachments.push({
-          type: "document",
-          path: block.path || block.url || block.name,
-          name: block.name || block.filename,
-          mimeType: block.mimeType || block.content_type,
-          description: `User shared a file: ${block.name || block.path || "document"}`,
-        });
-      }
-      // 文本中引用的文件路径
-      if (block.type === "text" && typeof block.text === "string") {
-        extractFilePaths(block.text, attachments);
-      }
-    }
-  }
-
-  // 2. 纯文本消息 — 检测文件路径引用
-  if (typeof content === "string") {
-    extractFilePaths(content, attachments);
-  }
-
-  // 3. 检查 attachments 字段（某些平台直接提供）
-  if (message.attachments && Array.isArray(message.attachments)) {
-    for (const att of message.attachments) {
-      const isImage = /\.(png|jpg|jpeg|gif|webp|svg|bmp)/i.test(att.name || att.filename || "");
-      attachments.push({
-        type: isImage ? "image" : "file",
-        path: att.path || att.url,
-        name: att.name || att.filename,
-        mimeType: att.mimeType || att.content_type,
-        description: `User shared: ${att.name || att.filename || "attachment"}`,
-      });
-    }
-  }
-
-  // 4. 检查 files 字段
-  if (message.files && Array.isArray(message.files)) {
-    for (const f of message.files) {
-      const isImage = /\.(png|jpg|jpeg|gif|webp|svg|bmp)/i.test(f.name || f.path || "");
-      attachments.push({
-        type: isImage ? "image" : "file",
-        path: f.path,
-        name: f.name,
-        mimeType: f.mimeType,
-        description: `User shared: ${f.name || f.path || "file"}`,
-      });
-    }
-  }
-
-  return attachments;
-}
-
-/** 从文本中提取看起来像文件路径的引用 */
-function extractFilePaths(text: string, attachments: DetectedAttachment[]) {
-  // 匹配常见文件路径模式
-  const filePathPattern = /(?:^|\s|[`'"])(\/[\w\-./]+\.\w{1,10}|[A-Z]:\\[\w\-./\\]+\.\w{1,10}|~\/[\w\-./]+\.\w{1,10}|\.\/[\w\-./]+\.\w{1,10})(?:[`'"\s,;)]|$)/gm;
-  let match: RegExpExecArray | null;
-  while ((match = filePathPattern.exec(text)) !== null) {
-    const path = match[1];
-    if (!path) continue;
-    const isImage = /\.(png|jpg|jpeg|gif|webp|svg|bmp)/i.test(path);
-    const isDoc = /\.(pdf|docx?|xlsx?|pptx?|md|txt|rst|html?|json|yaml|yml|toml|csv)/i.test(path);
-    if (isImage || isDoc) {
-      // 避免重复
-      if (!attachments.some(a => a.path === path)) {
-        attachments.push({
-          type: isImage ? "image" : "document",
-          path,
-          name: path.split(/[\/\\]/).pop() || path,
-          description: `File reference: ${path}`,
-        });
-      }
-    }
-  }
-}
-
-// ============================================================
-// ContextEngine 实现 — 存储层（框架自动调用，不调 LLM）
+// CamContextEngine — 框架自动调用的核心接口
 // ============================================================
 
 class CamContextEngine implements ContextEngine {
+  private store: CamMemoryStore;
   private config: ReturnType<typeof resolveConfig>;
-  private lastQueryResult: string | null = null;
-  private recentAttachments: DetectedAttachment[] = [];
-  private recentAttachmentTs = 0;
+  private recentAttachments: Array<{
+    type: string;
+    name: string;
+    detected: number;
+  }> = [];
+  private agentId = "unknown";
+  private sessionId = "unknown";
 
-  constructor(cfg: ReturnType<typeof resolveConfig>) {
-    this.config = cfg;
+  constructor(config: ReturnType<typeof resolveConfig>) {
+    this.config = config;
+    this.store = new CamMemoryStore(config.wikiPath);
+    console.log(`[cam-engine] Initialized, wikiPath=${config.wikiPath}`);
   }
 
-  /**
-   * ingest(): 框架在每条消息到达时自动调用
-   * 存原始对话 + 检测文件/图片附件
-   */
   async ingest(params: {
     sessionId: string;
     sessionKey?: string;
-    message: any;
+    message: {
+      role: string;
+      content?: string | Array<{ type: string; text?: string; image_url?: { url: string }; file_url?: { url: string } }>;
+    };
+    isHeartbeat?: boolean;
   }): Promise<IngestResult> {
-    try {
-      const content = this.extractTextContent(params.message);
-      const role = params.message?.role || "unknown";
+    if (params.isHeartbeat) return { ingested: false };
 
-      // 检测文件/图片附件
-      const attachments = detectAttachments(params.message);
-      if (attachments.length > 0) {
-        this.recentAttachments = attachments;
-        this.recentAttachmentTs = Date.now();
-        console.log(`[cam-ingest] Detected ${attachments.length} attachment(s): ${attachments.map(a => a.description).join(", ")}`);
-      }
+    const { sessionId, message } = params;
+    this.sessionId = sessionId;
 
-      // 只存原始对话，不调 LLM
-      if (!content || content.length < 5) {
-        // 即使没有文本内容，有附件也要存储
-        if (attachments.length === 0) return { ingested: false };
-      }
+    // Extract agent ID from session key if available
+    const sk = params.sessionKey || "";
+    if (sk.startsWith("agent:")) {
+      this.agentId = sk.split(":")[1] || "unknown";
+    }
 
-      const attachmentNote = attachments.length > 0
-        ? `\n[Attachments: ${attachments.map(a => `${a.type}: ${a.name || a.path || "unknown"}`).join(", ")}]`
-        : "";
+    // Extract text content
+    let userText = "";
+    let aiText = "";
 
-      const result = await daemonPost("/hook", {
-        user_message: role === "user" ? content + attachmentNote : "",
-        ai_response: role === "assistant" ? content : "",
-        conversation: [{ role, content: content + attachmentNote }],
-        agent_id: "openclaw",
-        session_id: params.sessionKey || params.sessionId || "",
-      }, this.config.daemonUrl);
+    if (message.role === "user") {
+      userText = this.extractText(message.content);
+    } else if (message.role === "assistant") {
+      aiText = this.extractText(message.content);
+    }
 
-      if (result?.facts_written && result.facts_written > 0) {
-        console.log(`[cam-ingest] stored ${role} message (${content.length} chars)`);
-      }
+    // Detect attachments
+    const attachments = this.detectAttachments(message);
+    if (attachments.length > 0) {
+      this.recentAttachments = attachments.map((a) => ({
+        ...a,
+        detected: Date.now(),
+      }));
+    }
 
-      return { ingested: !!result };
-    } catch (e) {
-      console.log("[cam-ingest] error:", (e as Error).message);
+    // Skip if no meaningful content
+    if (!userText.trim() && !aiText.trim() && attachments.length === 0) {
       return { ingested: false };
     }
+
+    // Store raw conversation
+    this.store.storeRawConversation(
+      userText || "(file/image attachment)",
+      aiText || "(processing)",
+      this.agentId,
+      sessionId,
+    );
+
+    // Heuristic: auto-extract obvious facts
+    if (userText.trim() && aiText.trim()) {
+      const heuristicFacts = this.store.heuristicExtract(userText, aiText);
+      for (const fact of heuristicFacts) {
+        this.store.storeFact({
+          ...fact,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (heuristicFacts.length > 0) {
+        console.log(
+          `[cam-ingest] Auto-extracted ${heuristicFacts.length} facts (heuristic)`,
+        );
+      }
+    }
+
+    return { ingested: true };
   }
 
-  /**
-   * assemble(): 框架在构建 prompt 时自动调用 — 召回相关记忆
-   */
   async assemble(params: {
     sessionId: string;
     sessionKey?: string;
-    messages: any[];
-    prompt?: string;
-    tokenBudget?: number;
+    budget?: number;
   }): Promise<AssembleResult> {
+    // Read recent conversation context from wiki
+    // We don't have a specific query here, so we load recent facts
+    const stats = this.store.getStats();
+    const totalPages = stats.totalPages as number;
+
+    if (totalPages === 0) {
+      return { content: "", tokenCount: 0 };
+    }
+
+    // Load a summary of recent wiki entries
+    const indexPath = join(this.config.wikiPath, ".cam-index.json");
+    let contextParts: string[] = [];
+
     try {
-      const query = params.prompt || "";
-      if (!query || query.length < 3 || !this.config.injectOnPrompt) {
-        return { messages: [], estimatedTokens: 0 };
+      if (existsSync(indexPath)) {
+        const data = JSON.parse(readFileSync(indexPath, "utf-8"));
+        const facts = data.facts || [];
+        // Take the most recent N facts
+        const recent = facts.slice(-this.config.maxRecallPages);
+        for (const fact of recent) {
+          const pagePath = this.store["getWikiPagePath"](
+            fact.category,
+            fact.name,
+          );
+          let preview = fact.content || "";
+          try {
+            if (existsSync(pagePath)) {
+              preview = readFileSync(pagePath, "utf-8").slice(0, 300);
+            }
+          } catch {}
+          contextParts.push(
+            `**[${fact.category}] ${fact.name}**\n${preview}`,
+          );
+        }
       }
+    } catch {}
 
-      const result = await daemonGet("/query", { q: query, top_k: "5" });
-      if (!result || !result.matches || result.matches.length === 0) {
-        return { messages: [], estimatedTokens: 0 };
-      }
-
-      this.lastQueryResult = this.formatMatches(result.matches);
-      const contextBlock = this.formatMatchesForPrompt(result.matches, query);
-
-      return {
-        messages: [],
-        estimatedTokens: Math.ceil(contextBlock.length / 4),
-        systemPromptAddition: contextBlock,
-      };
-    } catch (e) {
-      console.log("[cam-assemble] error:", (e as Error).message);
-      return { messages: [], estimatedTokens: 0 };
+    if (contextParts.length === 0) {
+      return { content: "", tokenCount: 0 };
     }
+
+    const content = [
+      "## 🧠 CAM Memory Recall",
+      "",
+      `The following knowledge was recalled from your memory wiki (${totalPages} pages total):`,
+      "",
+      ...contextParts,
+      "",
+    ].join("\n");
+
+    return {
+      content,
+      tokenCount: Math.ceil(content.length / 4),
+    };
   }
 
-  async compact(): Promise<any> {
-    return { ok: true, compacted: false, reason: "CAM does not manage compaction" };
+  async compact(): Promise<void> {
+    // CAM doesn't compact — that's LCM's job
   }
 
-  /** 获取最近检测到的附件（5分钟内有效） */
-  getRecentAttachments(): DetectedAttachment[] {
-    if (Date.now() - this.recentAttachmentTs > 5 * 60 * 1000) {
-      this.recentAttachments = [];
-    }
+  // ── Public API for hooks/tools ──
+
+  getStore(): CamMemoryStore {
+    return this.store;
+  }
+
+  getRecentAttachments(): Array<{ type: string; name: string; detected: number }> {
+    const now = Date.now();
+    this.recentAttachments = this.recentAttachments.filter(
+      (a) => now - a.detected < 60000,
+    );
     return this.recentAttachments;
   }
 
-  private extractTextContent(message: any): string {
-    if (!message) return "";
-    if (typeof message.content === "string") return message.content;
-    if (Array.isArray(message.content)) {
-      return message.content
-        .filter((p: any) => p.type === "text")
-        .map((p: any) => p.text || "")
+  getAgentId(): string {
+    return this.agentId;
+  }
+
+  // ── Helpers ──
+
+  private extractText(
+    content?: string | Array<{ type: string; text?: string }>,
+  ): string {
+    if (!content) return "";
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      return content
+        .filter((c) => c.type === "text" && c.text)
+        .map((c) => c.text || "")
         .join("\n");
     }
-    return String(message.content || "");
+    return String(content);
   }
 
-  private formatMatches(matches: DaemonResponse["matches"]): string {
-    if (!matches) return "";
-    return matches!.map(m => `- **[${m.name}]** (${m.page}): ${m.preview || m.content_snippet?.slice(0, 150)}`).join("\n");
-  }
+  private detectAttachments(
+    message: { role: string; content?: unknown },
+  ): Array<{ type: string; name: string }> {
+    const attachments: Array<{ type: string; name: string }> = [];
+    const content = message.content;
+    if (!content) return attachments;
 
-  private formatMatchesForPrompt(matches: DaemonResponse["matches"], query: string): string {
-    const parts: string[] = [
-      "",
-      "---",
-      "<cam-memory>",
-      `<!-- CAM memory recall for: "${query.slice(0, 80)}" -->`,
-    ];
-    for (const m of matches!.slice(0, 5)) {
-      const preview = m.preview || m.content_snippet?.slice(0, 200) || "";
-      parts.push(`**${m.name}**: ${preview}`);
+    // Structured content blocks
+    if (Array.isArray(content)) {
+      for (const block of content) {
+        if (block && typeof block === "object") {
+          if (block.type === "image" || block.type === "image_url") {
+            attachments.push({
+              type: "image",
+              name: block.text || "image",
+            });
+          } else if (block.type === "file" || block.type === "file_url") {
+            attachments.push({
+              type: "file",
+              name: block.text || block.filename || "file",
+            });
+          }
+        }
+      }
     }
-    parts.push("</cam-memory>", "");
-    return parts.join("\n");
-  }
 
-  getLastRecall(): string | null {
-    return this.lastQueryResult;
+    return attachments;
   }
 }
 
 // ============================================================
-// Tool 定义 — Agent 主动调用（核心！）
+// Tool Definitions
 // ============================================================
 
-/** Helper: format tool output */
-function jsonToolResult(data: Record<string, unknown>) {
-  return {
-    content: data.content
-      ? [{ type: "text" as const, text: String(data.content) }]
-      : [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
-    details: data,
-  };
-}
-
-/**
- * cam_extract: 最核心的 tool！
- *
- * Agent 用自身 LLM 分析对话后，把提取到的知识通过此 tool 存入 wiki。
- */
-function createCamExtractTool(daemonUrl: string) {
+function createCamExtractTool(
+  store: CamMemoryStore,
+): ReturnType<OpenClawPluginApi["registerTool"]> extends (fn: (ctx: any) => infer R) => void ? R : never {
   return {
     name: "cam_extract",
-    label: "CAM Extract",
     description:
-      "Store extracted knowledge into the CAM Wiki knowledge base. " +
-      "Use this tool when you identify important information in the conversation that should be remembered " +
-      "across sessions — such as user preferences, decisions, technical choices, corrections, " +
-      "architecture decisions, or any factual knowledge worth preserving. " +
-      "YOU (the Agent) do the extraction using your own LLM capabilities, then pass the structured facts here.",
+      "Store extracted knowledge into the CAM memory wiki. " +
+      "Use this when you identify important facts, decisions, preferences, or concepts " +
+      "from the conversation that should be remembered for future sessions. " +
+      "Each fact should have: name, content, category (entity/concept/synthesis), and optional tags.",
     parameters: {
-      type: "object" as const,
+      type: "object",
       properties: {
         facts: {
           type: "array",
-          description: "Array of facts to store. Each fact should have content and optionally a type.",
+          description:
+            "Array of extracted facts to store. Each fact: {name, content, category?, tags?}",
           items: {
             type: "object",
             properties: {
+              name: {
+                type: "string",
+                description: "Short name/title for this fact (e.g., 'React Framework', 'Deploy Decision')",
+              },
               content: {
                 type: "string",
-                description: "The fact/knowledge to store (clear, concise, self-contained)",
+                description: "The fact content in detail",
               },
-              fact_type: {
+              category: {
                 type: "string",
-                description: "Type: 'entity' (person/project/tool), 'concept' (idea/pattern), 'synthesis' (decision/summary), or 'fact' (general)",
-                enum: ["entity", "concept", "synthesis", "fact"],
+                enum: ["entity", "concept", "synthesis"],
+                description:
+                  "entity=specific thing (tool/project/person), concept=abstract idea, synthesis=decision/preference/conclusion",
               },
               tags: {
                 type: "array",
@@ -430,155 +715,122 @@ function createCamExtractTool(daemonUrl: string) {
                 description: "Tags for categorization",
               },
             },
-            required: ["content"],
+            required: ["name", "content"],
           },
-        },
-        context: {
-          type: "string",
-          description: "Brief context about what was being discussed when these facts were extracted",
         },
       },
       required: ["facts"],
     },
-    async execute(_toolCallId: string, params: Record<string, unknown>) {
-      const facts = params.facts as Array<Record<string, unknown>>;
-      if (!facts || !Array.isArray(facts) || facts.length === 0) {
-        return jsonToolResult({ error: "facts array is required and must not be empty" });
-      }
+    async execute(args: {
+      facts: Array<{
+        name: string;
+        content: string;
+        category?: string;
+        tags?: string[];
+      }>;
+    }): Promise<string> {
+      const results: string[] = [];
 
-      const context = String(params.context || "");
-
-      const result = await daemonPost("/hook", {
-        user_message: context || "Agent extracted knowledge",
-        ai_response: "",
-        agent_id: "openclaw-agent",
-        session_id: process.env.OPENCLAW_SESSION_ID || "",
-        extracted_facts: facts,
-      }, daemonUrl);
-
-      if (!result) {
-        return jsonToolResult({
-          content: `[CAM] ${facts.length} fact(s) queued (daemon offline)`,
-          queued: true,
+      for (const fact of args.facts) {
+        const category = (fact.category as FactCategory) || store.classifyFact(fact.content, fact.name);
+        const stored = store.storeFact({
+          name: fact.name,
+          category,
+          content: fact.content,
+          tags: fact.tags || [],
+          agentId: "agent-extracted",
+          timestamp: new Date().toISOString(),
+          sourceSnippet: "Agent-extracted via cam_extract tool",
         });
+
+        results.push(
+          stored
+            ? `✅ Stored: [${category}] ${fact.name}`
+            : `⏭️ Skipped (duplicate): ${fact.name}`,
+        );
       }
 
-      return jsonToolResult({
-        content: [
-          `## CAM Knowledge Stored`,
-          `**Facts:** ${facts.length} submitted, ${result.facts_written || 0} written`,
-          `**Status:** ${result.status}`,
-          result.throttled ? `*(Throttled: ${result.message})*` : "",
-        ].filter(Boolean).join("\n"),
-        factsSubmitted: facts.length,
-        factsWritten: result.facts_written || 0,
-      });
+      return `CAM Extract Results:\n${results.join("\n")}`;
     },
-  };
+  } as any;
 }
 
-/** cam_query: 搜索 Wiki 知识库 */
-function createCamQueryTool(daemonUrl: string) {
+function createCamQueryTool(
+  store: CamMemoryStore,
+): any {
   return {
     name: "cam_query",
-    label: "CAM Query",
     description:
-      "Search the CAM knowledge base (Wiki) for relevant facts, decisions, preferences, or knowledge. " +
-      "Use this when you need to recall something from past conversations.",
+      "Search the CAM memory wiki for relevant knowledge. " +
+      "Use this when you need to recall previously stored facts, decisions, or concepts.",
     parameters: {
-      type: "object" as const,
+      type: "object",
       properties: {
-        query: {
+        question: {
           type: "string",
-          description: "Search query for the knowledge base",
+          description: "What to search for in the memory wiki",
         },
         top_k: {
           type: "number",
-          description: "Number of results to return (default: 5)",
-          minimum: 1,
-          maximum: 20,
+          description: "Max results to return (default: 5)",
         },
       },
-      required: ["query"],
+      required: ["question"],
     },
-    async execute(_toolCallId: string, params: Record<string, unknown>) {
-      const q = String(params.query || "").trim();
-      if (!q) return jsonToolResult({ error: "query is required" });
-      const k = typeof params.top_k === "number" ? params.top_k : 5;
+    async execute(args: { question: string; top_k?: number }): Promise<string> {
+      const results = store.query(args.question, args.top_k || 5);
 
-      const result = await daemonGet("/query", { q, top_k: String(k) });
-      if (!result) return jsonToolResult({ error: "CAM daemon is offline" });
-
-      const lines: string[] = [
-        "## CAM Knowledge Base Results",
-        `**Query:** \`${q}\``,
-        `**Found:** ${result.results_found || result.matches?.length || 0} match(es)`,
-        "",
-      ];
-
-      if (result.matches?.length) {
-        for (const m of result.matches) {
-          lines.push(`### ${m.name}`);
-          lines.push(`**Page:** ${m.page}`);
-          lines.push(m.content_snippet || m.preview || "(no preview)");
-          lines.push("");
-        }
-      } else {
-        lines.push("No matching facts found.");
+      if (results.length === 0) {
+        return "No matching memories found in the CAM wiki.";
       }
 
-      return jsonToolResult({ content: lines.join("\n"), count: result.matches?.length || 0 });
+      const lines = results.map(
+        (r, i) =>
+          `${i + 1}. **[${r.category}] ${r.name}** (relevance: ${(r.relevance * 100).toFixed(0)}%)\n   ${r.content.slice(0, 200)}`,
+      );
+
+      return `CAM Query Results for "${args.question}":\n\n${lines.join("\n\n")}`;
     },
   };
 }
 
-/** cam_stats: 获取统计面板 */
-function createCamStatsTool() {
+function createCamStatsTool(store: CamMemoryStore): any {
   return {
     name: "cam_stats",
-    label: "CAM Stats",
-    description: "Get CAM memory engine statistics.",
-    parameters: {
-      type: "object" as const,
-      properties: {},
-    },
-    async execute() {
-      const result = await daemonGet("/stats");
-      if (!result) return jsonToolResult({ error: "CAM daemon is offline" });
-      return jsonToolResult({
-        content: [
-          "## CAM Memory Stats",
-          `**Status:** ${result.status || "unknown"}`,
-          `**Facts:** ${(result as any).total_facts || 0}`,
-          `**Pages:** ${(result as any).total_pages || 0}`,
-        ].join("\n"),
-        raw: result,
-      });
+    description: "Show CAM memory wiki statistics.",
+    parameters: { type: "object", properties: {} },
+    async execute(): Promise<string> {
+      const stats = store.getStats();
+      return [
+        `📊 **CAM Memory Wiki Stats**`,
+        ``,
+        `- **Total Facts**: ${stats.totalFacts}`,
+        `- **Total Pages**: ${stats.totalPages}`,
+        `- **Total Size**: ${(stats.totalBytes as number / 1024).toFixed(1)} KB`,
+        `- **Entity Pages**: ${stats.byCategory.entity}`,
+        `- **Concept Pages**: ${stats.byCategory.concept}`,
+        `- **Synthesis Pages**: ${stats.byCategory.synthesis}`,
+        `- **Wiki Path**: ${stats.wikiPath}`,
+      ].join("\n");
     },
   };
 }
 
-/**
- * cam_extract_file: 文件/图片/文档 → Agent LLM 提取 → 存入 wiki
- *
- * Agent 读取文件后，用自身 LLM 分析，然后调用此 tool 存储
- */
-function createCamExtractFileTool(daemonUrl: string) {
+function createCamExtractFileTool(
+  store: CamMemoryStore,
+): any {
   return {
     name: "cam_extract_file",
-    label: "CAM Extract File",
     description:
-      "Extract key information from a file, image, or document that you have already read/analyzed, " +
-      "then store the extracted knowledge into the CAM Wiki. " +
-      "Use this when the user shares a project file, image, or document containing " +
-      "valuable information worth remembering (design decisions, requirements, architecture, preferences, specs). " +
-      "YOU analyze the file with your LLM, then pass the extracted facts here.",
+      "Extract knowledge from a file, image, or document and store it in the CAM wiki. " +
+      "Use this when the user shares a file and you want to learn from its contents. " +
+      "First read/analyze the file, then call this tool with the extracted facts.",
     parameters: {
-      type: "object" as const,
+      type: "object",
       properties: {
-        file_path: {
+        filename: {
           type: "string",
-          description: "Path or name of the file/image that was analyzed",
+          description: "Name of the file being processed",
         },
         facts: {
           type: "array",
@@ -586,239 +838,138 @@ function createCamExtractFileTool(daemonUrl: string) {
           items: {
             type: "object",
             properties: {
-              content: {
+              name: { type: "string" },
+              content: { type: "string" },
+              category: {
                 type: "string",
-                description: "The extracted fact/knowledge",
+                enum: ["entity", "concept", "synthesis"],
               },
-              fact_type: {
-                type: "string",
-                description: "Type: 'entity', 'concept', 'synthesis', or 'fact'",
-                enum: ["entity", "concept", "synthesis", "fact"],
-              },
-              tags: {
-                type: "array",
-                items: { type: "string" },
-                description: "Tags for categorization",
-              },
+              tags: { type: "array", items: { type: "string" } },
             },
-            required: ["content"],
+            required: ["name", "content"],
           },
         },
-        summary: {
-          type: "string",
-          description: "Brief summary of what the file contains and why it matters",
-        },
       },
-      required: ["file_path", "facts"],
+      required: ["filename", "facts"],
     },
-    async execute(_toolCallId: string, params: Record<string, unknown>) {
-      const filePath = String(params.file_path || "").trim();
-      const facts = params.facts as Array<Record<string, unknown>>;
-      const summary = String(params.summary || "");
+    async execute(args: {
+      filename: string;
+      facts: Array<{
+        name: string;
+        content: string;
+        category?: string;
+        tags?: string[];
+      }>;
+    }): Promise<string> {
+      const results: string[] = [];
 
-      if (!filePath) return jsonToolResult({ error: "file_path is required" });
-      if (!facts || !Array.isArray(facts) || facts.length === 0) {
-        return jsonToolResult({ error: "facts array is required and must not be empty" });
-      }
-
-      const result = await daemonPost("/hook", {
-        user_message: `File: ${filePath}${summary ? `\nSummary: ${summary}` : ""}`,
-        ai_response: "",
-        agent_id: "openclaw-file-extract",
-        session_id: "file-extraction",
-        extracted_facts: facts,
-        metadata: {
-          source_type: "file_extraction",
-          file_path: filePath,
-        },
-      }, daemonUrl);
-
-      if (!result) {
-        return jsonToolResult({
-          content: `[CAM] ${facts.length} fact(s) from ${filePath} queued (daemon offline)`,
-          queued: true,
+      for (const fact of args.facts) {
+        const category = (fact.category as FactCategory) || store.classifyFact(fact.content, fact.name);
+        const stored = store.storeFact({
+          name: fact.name,
+          category,
+          content: fact.content,
+          tags: [...(fact.tags || []), `file:${args.filename}`],
+          agentId: "agent-extracted",
+          timestamp: new Date().toISOString(),
+          sourceSnippet: `Extracted from file: ${args.filename}`,
         });
+
+        results.push(
+          stored
+            ? `✅ Stored: [${category}] ${fact.name} (from ${args.filename})`
+            : `⏭️ Skipped: ${fact.name}`,
+        );
       }
 
-      return jsonToolResult({
-        content: [
-          `## CAM File Extraction: ${filePath}`,
-          `**Facts:** ${facts.length} submitted, ${result.facts_written || 0} written`,
-          `**Status:** ${result.status}`,
-        ].join("\n"),
-        factsSubmitted: facts.length,
-        factsWritten: result.facts_written || 0,
-      });
+      return `CAM File Extraction Results (${args.filename}):\n${results.join("\n")}`;
     },
   };
 }
 
 // ============================================================
-// Hook 处理器 — 补充层
+// Hook Handlers
 // ============================================================
 
-let _cachedUserMsg = "";
-let _cachedUserTs = 0;
-let _cachedAttachments: DetectedAttachment[] = [];
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CAM_RECALL_INSTRUCTION = `[CAM Memory System]
+You have access to a Compound Agent Memory (CAM) system. Here's how to use it:
 
-/**
- * before_prompt_build: 注入提取指令 + 文件处理提示
- *
- * 关键改进：
- * 1. 检测到文件/图片附件时，注入强烈的处理提示
- * 2. 告诉 Agent "你收到了文件，请用 cam_extract_file 提取"
- */
-export function handleBeforePromptBuild(
-  ctx: any & { config?: Record<string, unknown> },
+1. **cam_extract** — When you identify important knowledge (decisions, preferences, facts, concepts), use this tool to store it in the memory wiki. This ensures the knowledge persists across sessions.
+
+2. **cam_query** — When you need to recall previously stored knowledge, use this tool to search the memory wiki.
+
+3. **cam_extract_file** — When the user shares a file/image/document, analyze it and use this tool to store extracted knowledge.
+
+Guidelines:
+- Extract facts proactively — don't wait to be asked
+- Categories: entity (specific things), concept (abstract ideas), synthesis (decisions/preferences)
+- Store decisions, user preferences, project conventions, technical choices
+- Do NOT store trivial or obvious information`;
+
+function handleBeforePromptBuild(
+  config: ReturnType<typeof resolveConfig>,
   engine: CamContextEngine,
 ): { prependSystemContext?: string } {
-  const config = ctx.config ? resolveConfig(ctx.config) : resolveConfig({});
   if (!config.injectOnPrompt) return {};
 
-  const parts: string[] = [
-    "",
-    "<cam-instructions>",
-    "CAM (Compound Agent Memory) is active. You have access to long-term knowledge storage:",
-    "",
-    "## When to use cam_extract:",
-    "- The user expresses a clear **preference** (e.g., 'I prefer...', 'Always use...')",
-    "- A **decision** is made (e.g., 'We'll use React', 'Switched to PostgreSQL')",
-    "- The user **corrects** previous information",
-    "- Important **technical choices** or **architecture decisions** are discussed",
-    "- The user shares **personal context** they'd want remembered (name, role, project details)",
-    "- Any **factual knowledge** worth preserving across conversations",
-    "",
-    "## When to use cam_extract_file:",
-    "- The user shares a file, image, or document with important information",
-    "- Read/analyze it first with your LLM, then call cam_extract_file to store key facts",
-    "- This includes: code files, design docs, screenshots, PDFs, config files, etc.",
-    "",
-    "## When to use cam_query:",
-    "- You need to recall something from past conversations",
-    "- The user asks about previous decisions, preferences, or context",
-    "",
-    "IMPORTANT: Do NOT call cam_extract for every message — only when genuinely valuable knowledge is identified.",
-  ];
+  const parts: string[] = [CAM_RECALL_INSTRUCTION];
 
-  // 检测最近收到的文件/图片附件
-  const recentAtts = engine.getRecentAttachments();
-  if (recentAtts.length > 0) {
-    parts.push("");
-    parts.push("## ⚠️ FILE/IMAGE DETECTED — ACTION REQUIRED");
-    parts.push("");
-    parts.push("The user has shared the following file(s)/image(s) in this conversation:");
-    for (const att of recentAtts) {
-      const icon = att.type === "image" ? "🖼️" : "📄";
-      parts.push(`- ${icon} **${att.type}**: ${att.name || att.path || "unknown"} ${att.mimeType ? `(${att.mimeType})` : ""}`);
-    }
-    parts.push("");
-    parts.push("**You MUST:**");
-    parts.push("1. Read and analyze the file/image content with your LLM");
-    parts.push("2. Extract key facts, decisions, requirements, or knowledge from it");
-    parts.push("3. Call `cam_extract_file` with the extracted facts to store them in the knowledge base");
-    parts.push("");
-    parts.push("This ensures important information from shared files is preserved for future conversations.");
-  }
-
-  parts.push("</cam-instructions>");
-  parts.push("");
-
-  return {
-    prependSystemContext: parts.join("\n"),
-  };
-}
-
-/** message_received: 缓存用户消息 + 检测文件 */
-export function handleMessageReceived(ctx: any, engine: CamContextEngine): void {
-  const msg =
-    ctx.userMessage ||
-    ctx.bodyForAgent ||
-    ctx.event?.content ||
-    (ctx.event && typeof ctx.event === "object" && "content" in ctx.event ? ctx.event.content : "") ||
-    "";
-  if (msg && typeof msg === "string" && msg.length > 10) {
-    _cachedUserMsg = msg;
-    _cachedUserTs = Date.now();
-  }
-
-  // 检测文件/图片附件
-  const event = ctx.event || ctx;
-  const attachments = detectAttachments(event);
+  // Check for recent attachments
+  const attachments = engine.getRecentAttachments();
   if (attachments.length > 0) {
-    _cachedAttachments = attachments;
-    _cachedUserTs = Date.now();
-    console.log(`[cam-msg] Detected ${attachments.length} attachment(s) in message_received`);
+    const fileList = attachments
+      .map((a) => `- 📄 ${a.type}: ${a.name}`)
+      .join("\n");
+    parts.push("");
+    parts.push(
+      `⚠️ FILE/IMAGE DETECTED — You received the following attachments:\n${fileList}\n\nYou MUST analyze the file/image content and use cam_extract_file to store key knowledge from it.`,
+    );
   }
-}
 
-/** llm_output: 日志 */
-export async function handleLlmOutput(
-  ctx: any & { config?: Record<string, unknown>; aiResponse?: string },
-): Promise<void> {
-  try {
-    const config = ctx.config ? resolveConfig(ctx.config) : resolveConfig({});
-    if (!config.extractOnOutput) return;
-
-    const aiResponse = ctx.aiResponse || ctx.lastAssistant || "";
-    if (!aiResponse || aiResponse.length < 20) return;
-
-    const fileIndicators = /\.(ts|js|py|json|yaml|yml|md|txt|pdf|png|jpg|jpeg)[`'\"\s]/i;
-    if (fileIndicators.test(aiResponse)) {
-      console.log("[cam-output] File discussion detected — Agent should use cam_extract_file");
-    }
-  } catch (_) {}
-}
-
-function getCachedUserMsg(): string {
-  if (!_cachedUserMsg || Date.now() - _cachedUserTs > CACHE_TTL_MS) return "";
-  return _cachedUserMsg;
+  return { prependSystemContext: parts.join("\n") };
 }
 
 // ============================================================
-// 插件注册入口
+// Plugin Registration
 // ============================================================
 
 const camPlugin = {
   id: "cam",
-  version: "5.1.0",
+  version: "6.0.0",
 
-  resolveConfig(env: Record<string, string>, value: Record<string, unknown>): Record<string, unknown> {
-    const raw = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-    return {
-      ...raw,
-      daemonUrl: (raw.daemonUrl as string) || env.CAM_DAEMON_URL || DAEMON_URL,
-    };
+  configSchema: {
+    parse(value: unknown) {
+      const raw =
+        value && typeof value === "object" && !Array.isArray(value)
+          ? (value as Record<string, unknown>)
+          : {};
+      return resolveConfig(raw);
+    },
   },
 
   register(api: OpenClawPluginApi): void {
-    const config = resolveConfig(api.config);
+    const config = resolveConfig(api.config || {});
     const engine = new CamContextEngine(config);
+    const store = engine.getStore();
 
-    // ── Layer 1: ContextEngine (框架自动调用，不调 LLM) ──
+    // ── L1: ContextEngine (框架自动调用) ──
     api.registerContextEngine("cam", () => engine);
 
-    // ── Layer 2: Tools (Agent 主动调用 — 知识提取核心) ──
-    api.registerTool(() => createCamExtractTool(config.daemonUrl));     // 最核心！
-    api.registerTool(() => createCamQueryTool(config.daemonUrl));
-    api.registerTool(() => createCamStatsTool());
-    api.registerTool(() => createCamExtractFileTool(config.daemonUrl));
+    // ── L2: Tools (Agent 主动调用) ──
+    api.registerTool(() => createCamExtractTool(store));
+    api.registerTool(() => createCamQueryTool(store));
+    api.registerTool(() => createCamStatsTool(store));
+    api.registerTool(() => createCamExtractFileTool(store));
 
-    // ── Layer 3: Hooks (补充 — 注入提取指令 + 文件检测提示) ──
+    // ── L3: Hooks (补充增强) ──
     api.on("before_prompt_build", () =>
-      handleBeforePromptBuild(config as any, engine),
+      handleBeforePromptBuild(config, engine),
     );
-    api.on("message_received", (event: any) => {
-      handleMessageReceived(event, engine);
-    });
-    api.on("llm_output", (event: any) => {
-      handleLlmOutput(event);
-    });
 
-    console.log(`[cam] Plugin v5.1 loaded (Agent-Native + Auto-Detect Files)`);
-    console.log(`[cam] daemon=${config.daemonUrl}`);
-    console.log(`[cam] Agent extracts knowledge → cam_extract stores it (no external LLM needed)`);
-    console.log(`[cam] Auto-detect: files/images/docs → prompt Agent to use cam_extract_file`);
+    console.log(`[cam] Plugin v6.0 loaded (Self-Contained)`);
+    console.log(`[cam] wikiPath=${config.wikiPath}`);
+    console.log(`[cam] No external daemon needed — all logic is self-contained`);
+    console.log(`[cam] Tools: cam_extract, cam_query, cam_stats, cam_extract_file`);
   },
 };
 
